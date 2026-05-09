@@ -4,8 +4,12 @@ import { ProtectedRoute } from './components/layout/ProtectedRoute.jsx';
 import AuthPage from './pages/AuthPage.jsx';
 import CertificationCatalogPage from './pages/CertificationCatalogPage.jsx';
 import CertificatesPage from './pages/CertificatesPage.jsx';
+import CertificateModerationPage from './pages/CertificateModerationPage.jsx';
+import InstitutionalAnalyticsPage from './pages/InstitutionalAnalyticsPage.jsx';
+import MentorActivityPage from './pages/MentorActivityPage.jsx';
 import MentorCatalogManager from './pages/MentorCatalogManager.jsx';
 import MentorDashboard from './pages/MentorDashboard.jsx';
+import MentorReviewQueuePage from './pages/MentorReviewQueuePage.jsx';
 import PortfolioPage from './pages/PortfolioPage.jsx';
 import StudentDashboard from './pages/StudentDashboard.jsx';
 import StudentsPage from './pages/StudentsPage.jsx';
@@ -30,6 +34,10 @@ export default function App() {
 
           <Route path="/mentor" element={<ProtectedRoute roles={['MENTOR']} nested />}>
             <Route index element={<MentorDashboard />} />
+            <Route path="review" element={<MentorReviewQueuePage />} />
+            <Route path="moderation" element={<CertificateModerationPage />} />
+            <Route path="analytics" element={<InstitutionalAnalyticsPage />} />
+            <Route path="activity" element={<MentorActivityPage />} />
             <Route path="catalog" element={<MentorCatalogManager />} />
             <Route path="templates" element={<TemplateManager />} />
             <Route path="students" element={<StudentsPage />} />

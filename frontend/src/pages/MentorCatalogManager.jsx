@@ -278,7 +278,7 @@ export default function MentorCatalogManager() {
                     </div>
                     <div>
                       <p className="font-black text-slate-950 dark:text-white">{organization.name}</p>
-                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{organization.certificationCount || 0} certifications · {organization.trainedTemplates || 0} templates</p>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{organization.certificationCount || 0} certifications - {organization.trainedTemplates || 0} templates</p>
                     </div>
                   </div>
                   <div className="flex gap-1">
@@ -314,7 +314,7 @@ export default function MentorCatalogManager() {
                           <StatusBadge status={certification.templateStatus} />
                         </div>
                         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                          {certification.organization?.name} · {pretty(certification.category, CATEGORY_LABELS)} · {pretty(certification.difficultyLevel, DIFFICULTY_LABELS)}
+                          {certification.organization?.name} - {pretty(certification.category, CATEGORY_LABELS)} - {pretty(certification.difficultyLevel, DIFFICULTY_LABELS)}
                         </p>
                         <p className="mt-3 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{certification.description}</p>
                       </div>

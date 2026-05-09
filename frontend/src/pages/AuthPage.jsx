@@ -28,7 +28,9 @@ export default function AuthPage() {
   if (isAuthenticated) return <Navigate to={target} replace />;
 
   const submit = async (event) => {
-    event.preventDefault();
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (loading) return;
     setError('');
     setLoading(true);
     try {
@@ -45,7 +47,7 @@ export default function AuthPage() {
             });
       navigate(nextUser.role === 'MENTOR' ? '/mentor' : '/student', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Authentication failed');
+      setError(err.userMessage || err.response?.data?.message || err.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -117,7 +119,7 @@ export default function AuthPage() {
             ))}
           </div>
 
-          <form className="mt-6 space-y-4" onSubmit={submit}>
+          <form className="mt-6 space-y-4" method="post" noValidate onSubmit={submit}>
             {mode === 'signup' && (
               <>
                 <input className="field" placeholder="Full name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
@@ -157,4 +159,3 @@ export default function AuthPage() {
     </div>
   );
 }
-

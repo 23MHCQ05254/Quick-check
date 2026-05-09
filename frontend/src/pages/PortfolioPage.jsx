@@ -39,7 +39,7 @@ export default function PortfolioPage() {
                     <p className="text-sm font-semibold text-cyber-green">Verified achievement portfolio</p>
                     <h1 className="mt-3 text-4xl font-black tracking-normal text-slate-950 dark:text-white sm:text-5xl">{student.name}</h1>
                     <p className="mt-3 text-slate-500 dark:text-slate-400">
-                      {student.department || 'Student'} · {student.rollNumber || 'Institution verified vault'}
+                      {student.department || 'Student'} - {student.rollNumber || 'Institution verified vault'}
                     </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3 lg:w-[460px]">
@@ -106,4 +106,3 @@ export default function PortfolioPage() {
     </div>
   );
 }
-

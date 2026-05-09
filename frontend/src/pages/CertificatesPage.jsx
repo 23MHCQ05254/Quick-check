@@ -43,7 +43,7 @@ export default function CertificatesPage() {
                       <StatusBadge status={certificate.status} />
                     </div>
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                      {certificate.organization?.name} · {certificate.certificateId || 'ID not provided'}
+                      {certificate.organization?.name} - {certificate.certificateId || 'ID not provided'}
                     </p>
                     {certificate.fileUrl && (
                       <a className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-cyber-cyan" href={`${apiRoot}${certificate.fileUrl}`} target="_blank" rel="noreferrer">

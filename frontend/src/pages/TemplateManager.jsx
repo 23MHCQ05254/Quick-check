@@ -49,7 +49,7 @@ export default function TemplateManager() {
             <option value="">Select certification</option>
             {(catalog.data || []).map((item) => (
               <option key={item._id || item.id} value={item._id || item.id}>
-                {item.organization?.name} · {item.name}
+                {item.organization?.name} - {item.name}
               </option>
             ))}
           </select>

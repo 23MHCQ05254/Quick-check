@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { api } from '../lib/api.js';
+import { authApi } from '../lib/api.js';
 
 const AuthContext = createContext(null);
 
@@ -17,8 +17,8 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    api
-      .get('/auth/me')
+    authApi
+      .me()
       .then(({ data }) => {
         setUser(data.user);
         localStorage.setItem('quickcheck.user', JSON.stringify(data.user));
@@ -33,6 +33,9 @@ export function AuthProvider({ children }) {
   }, [token]);
 
   const persistSession = (data) => {
+    if (!data?.token || !data?.user) {
+      throw new Error('Authentication response did not include a valid session');
+    }
     localStorage.setItem('quickcheck.token', data.token);
     localStorage.setItem('quickcheck.user', JSON.stringify(data.user));
     setToken(data.token);
@@ -40,13 +43,13 @@ export function AuthProvider({ children }) {
   };
 
   const login = async (payload) => {
-    const { data } = await api.post('/auth/login', payload);
+    const { data } = await authApi.login(payload);
     persistSession(data);
     return data.user;
   };
 
   const signup = async (payload) => {
-    const { data } = await api.post('/auth/signup', payload);
+    const { data } = await authApi.signup(payload);
     persistSession(data);
     return data.user;
   };
@@ -67,4 +70,3 @@ export function AuthProvider({ children }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
-

@@ -261,6 +261,51 @@ const users = [
     skillScore: 91,
     placementReadiness: 0,
     notifications: []
+  },
+  {
+    _id: id(),
+    name: 'Meera Nanduri',
+    email: 'meera@quickcheck.edu',
+    password: bcrypt.hashSync('password123', 8),
+    role: 'STUDENT',
+    department: 'Information Technology',
+    rollNumber: 'QC23IT018',
+    graduationYear: 2027,
+    publicSlug: 'meera-nanduri',
+    skills: ['Cloud Foundations', 'Azure', 'Governance'],
+    skillScore: 68,
+    placementReadiness: 72,
+    notifications: []
+  },
+  {
+    _id: id(),
+    name: 'Arjun Varma',
+    email: 'arjun@quickcheck.edu',
+    password: bcrypt.hashSync('password123', 8),
+    role: 'STUDENT',
+    department: 'Electronics and Communication',
+    rollNumber: 'QC23EC031',
+    graduationYear: 2026,
+    publicSlug: 'arjun-varma',
+    skills: ['SOC Monitoring', 'Networking', 'Threat Analysis'],
+    skillScore: 59,
+    placementReadiness: 54,
+    notifications: []
+  },
+  {
+    _id: id(),
+    name: 'Nisha Iyer',
+    email: 'nisha@quickcheck.edu',
+    password: bcrypt.hashSync('password123', 8),
+    role: 'STUDENT',
+    department: 'Computer Science',
+    rollNumber: 'QC23CS077',
+    graduationYear: 2028,
+    publicSlug: 'nisha-iyer',
+    skills: ['Data Analysis', 'SQL', 'Dashboards'],
+    skillScore: 82,
+    placementReadiness: 79,
+    notifications: []
   }
 ].map((user) => ({ ...user, id: user._id }));
 
@@ -293,9 +338,146 @@ const certificates = [
     },
     createdAt: new Date('2026-01-13'),
     updatedAt: new Date('2026-01-14')
+  },
+  {
+    _id: id(),
+    id: null,
+    student: users[2]._id,
+    certification: certifications[2]._id,
+    organization: organizations[2]._id,
+    title: certifications[2].name,
+    certificateId: 'AWS-CCP-2026-2210',
+    issueDate: new Date('2026-02-18'),
+    fileUrl: '',
+    filePath: '',
+    originalName: 'aws-cloud-practitioner.png',
+    qrData: 'https://aws.amazon.com/verification/AWS-CCP-2026-2210',
+    ocrText: 'AWS Certified Cloud Practitioner Meera Nanduri AWS-CCP-2026-2210',
+    textFingerprint: 'aws certified cloud meera nanduri practitioner',
+    imageHash: 'demo-hash-aws-2210',
+    status: 'PENDING',
+    locked: false,
+    analysis: {
+      fraudProbability: 28,
+      confidence: 82,
+      nameSimilarity: 91,
+      visualSimilarity: 84,
+      trustScore: 77,
+      riskLevel: 'LOW',
+      suspiciousIndicators: [],
+      anomalies: [],
+      recommendation: 'LOW_RISK'
+    },
+    createdAt: new Date('2026-02-19'),
+    updatedAt: new Date('2026-02-19')
+  },
+  {
+    _id: id(),
+    id: null,
+    student: users[3]._id,
+    certification: certifications[1]._id,
+    organization: organizations[1]._id,
+    title: certifications[1].name,
+    certificateId: 'CYB-OPS-2026-8891',
+    issueDate: new Date('2026-03-08'),
+    fileUrl: '',
+    filePath: '',
+    originalName: 'cisco-cyberops-review.png',
+    qrData: '',
+    ocrText: 'Cisco CyberOps Associate Arjun V. Certificate CYB-OPS-2026-8891',
+    textFingerprint: 'associate certificate cisco cyberops arjun',
+    imageHash: 'demo-hash-cisco-8891',
+    status: 'REVIEW_REQUIRED',
+    locked: false,
+    analysis: {
+      fraudProbability: 74,
+      confidence: 69,
+      nameSimilarity: 67,
+      visualSimilarity: 62,
+      trustScore: 38,
+      riskLevel: 'HIGH',
+      suspiciousIndicators: ['Student name similarity is below threshold', 'QR data was not detected', 'Visual profile differs from template reference'],
+      anomalies: [{ code: 'NAME_MISMATCH', severity: 'HIGH' }],
+      recommendation: 'MENTOR_REVIEW'
+    },
+    createdAt: new Date('2026-03-09'),
+    updatedAt: new Date('2026-03-09')
+  },
+  {
+    _id: id(),
+    id: null,
+    student: users[4]._id,
+    certification: certifications[3]._id,
+    organization: organizations[3]._id,
+    title: certifications[3].name,
+    certificateId: 'GDA-2026-4117',
+    issueDate: new Date('2026-04-22'),
+    fileUrl: '',
+    filePath: '',
+    originalName: 'google-data-analytics.png',
+    qrData: 'https://coursera.org/verify/GDA-2026-4117',
+    ocrText: 'Google Data Analytics Professional Certificate Nisha Iyer GDA-2026-4117',
+    textFingerprint: 'analytics certificate data google iyer nisha',
+    imageHash: 'demo-hash-gda-4117',
+    status: 'VERIFIED',
+    locked: false,
+    analysis: {
+      fraudProbability: 9,
+      confidence: 92,
+      nameSimilarity: 98,
+      visualSimilarity: 93,
+      trustScore: 94,
+      riskLevel: 'LOW',
+      suspiciousIndicators: [],
+      anomalies: [],
+      recommendation: 'LOW_RISK'
+    },
+    createdAt: new Date('2026-04-23'),
+    updatedAt: new Date('2026-04-24')
   }
 ];
-certificates[0].id = certificates[0]._id;
+certificates.forEach((certificate) => {
+  certificate.id = certificate._id;
+});
+
+const activityLogs = [
+  {
+    _id: id(),
+    actor: users[1]._id,
+    actorRole: 'MENTOR',
+    action: 'TEMPLATE_PROFILE_ACTIVATED',
+    entityType: 'TemplateProfile',
+    entityId: templates[0]._id,
+    severity: 'INFO',
+    message: 'MongoDB Associate Developer template profile activated',
+    metadata: { certification: 'MongoDB Associate Developer' },
+    createdAt: new Date('2026-01-12T10:30:00.000Z')
+  },
+  {
+    _id: id(),
+    actor: users[0]._id,
+    actorRole: 'STUDENT',
+    action: 'CERTIFICATE_UPLOADED',
+    entityType: 'Certificate',
+    entityId: certificates[0]._id,
+    severity: 'LOW',
+    message: 'Joseph Raju Janga uploaded MongoDB Associate Developer',
+    metadata: { fraudProbability: 12 },
+    createdAt: new Date('2026-01-13T09:15:00.000Z')
+  },
+  {
+    _id: id(),
+    actor: users[1]._id,
+    actorRole: 'MENTOR',
+    action: 'CERTIFICATE_VERIFIED',
+    entityType: 'Certificate',
+    entityId: certificates[0]._id,
+    severity: 'INFO',
+    message: 'Mentor verified MongoDB Associate Developer certificate',
+    metadata: { status: 'VERIFIED' },
+    createdAt: new Date('2026-01-14T12:20:00.000Z')
+  }
+].map((log) => ({ ...log, id: log._id }));
 
 const expose = (record) => (record ? { ...record, id: record._id } : null);
 const withOrganization = (certification) => ({
@@ -314,6 +496,7 @@ export const demoStore = {
   certifications,
   templates,
   certificates,
+  activityLogs,
   findUserById(userId) {
     return expose(users.find((user) => user._id === userId || user.id === userId));
   },
@@ -538,6 +721,16 @@ export const demoStore = {
     };
     record.id = record._id;
     certificates.unshift(record);
+    this.addActivity({
+      actor: payload.student,
+      actorRole: 'STUDENT',
+      action: 'CERTIFICATE_UPLOADED',
+      entityType: 'Certificate',
+      entityId: record._id,
+      severity: payload.status === 'REVIEW_REQUIRED' ? 'HIGH' : 'LOW',
+      message: `${payload.title} uploaded for AI-assisted verification`,
+      metadata: { status: payload.status, fraudProbability: payload.analysis?.fraudProbability || 0 }
+    });
     return expose(record);
   },
   listCertificatesForStudent(studentId) {
@@ -580,8 +773,116 @@ export const demoStore = {
     certificate.reviewNotes = payload.reviewNotes || '';
     certificate.reviewedBy = payload.reviewedBy;
     certificate.reviewedAt = new Date();
+    certificate.moderation = {
+      ...(certificate.moderation || {}),
+      overrideReason: payload.overrideReason || payload.reviewNotes || '',
+      manualReviewRequested: payload.status === 'REVIEW_REQUIRED'
+    };
     certificate.updatedAt = new Date();
+    this.addActivity({
+      actor: payload.reviewedBy,
+      actorRole: 'MENTOR',
+      action: `CERTIFICATE_${payload.status}`,
+      entityType: 'Certificate',
+      entityId: certificate._id,
+      severity: payload.status === 'REJECTED' ? 'HIGH' : payload.status === 'REVIEW_REQUIRED' ? 'MEDIUM' : 'INFO',
+      message: `${certificate.title} moved to ${payload.status.replaceAll('_', ' ')}`,
+      metadata: { reviewNotes: payload.reviewNotes }
+    });
     return this.decorateCertificate(certificate);
+  },
+  moderateCertificate(certificateId, payload) {
+    const certificate = certificates.find((cert) => cert._id === certificateId || cert.id === certificateId);
+    if (!certificate) return null;
+    if (payload.status) certificate.status = payload.status;
+    if (payload.locked !== undefined) certificate.locked = payload.locked;
+    certificate.reviewNotes = payload.reviewNotes || certificate.reviewNotes || '';
+    certificate.moderation = {
+      ...(certificate.moderation || {}),
+      overrideReason: payload.overrideReason || certificate.moderation?.overrideReason || '',
+      manualReviewRequested: payload.manualReviewRequested ?? certificate.moderation?.manualReviewRequested ?? false
+    };
+    certificate.updatedAt = new Date();
+    this.addActivity({
+      actor: payload.actor,
+      actorRole: 'MENTOR',
+      action: 'CERTIFICATE_MODERATED',
+      entityType: 'Certificate',
+      entityId: certificate._id,
+      severity: certificate.status === 'REJECTED' ? 'HIGH' : 'INFO',
+      message: `${certificate.title} moderation state updated`,
+      metadata: { status: certificate.status, locked: certificate.locked }
+    });
+    return this.decorateCertificate(certificate);
+  },
+  rerunCertificate(certificateId, actor) {
+    const certificate = certificates.find((cert) => cert._id === certificateId || cert.id === certificateId);
+    if (!certificate) return null;
+    const currentRisk = certificate.analysis?.fraudProbability || 0;
+    certificate.analysis = {
+      ...(certificate.analysis || {}),
+      fraudProbability: Math.max(3, Math.min(96, currentRisk + (currentRisk > 60 ? -4 : 2))),
+      confidence: Math.min(96, (certificate.analysis?.confidence || 70) + 3),
+      recommendation: currentRisk > 60 ? 'MENTOR_REVIEW' : 'LOW_RISK'
+    };
+    certificate.moderation = {
+      ...(certificate.moderation || {}),
+      rerunCount: (certificate.moderation?.rerunCount || 0) + 1,
+      lastRerunAt: new Date()
+    };
+    certificate.updatedAt = new Date();
+    this.addActivity({
+      actor,
+      actorRole: 'MENTOR',
+      action: 'AI_ANALYSIS_RERUN',
+      entityType: 'Certificate',
+      entityId: certificate._id,
+      severity: 'MEDIUM',
+      message: `AI analysis rerun for ${certificate.title}`,
+      metadata: { fraudProbability: certificate.analysis.fraudProbability }
+    });
+    return this.decorateCertificate(certificate);
+  },
+  deleteCertificate(certificateId, actor) {
+    const certificate = certificates.find((cert) => cert._id === certificateId || cert.id === certificateId);
+    if (!certificate) return null;
+    certificate.status = 'REJECTED';
+    certificate.moderation = {
+      ...(certificate.moderation || {}),
+      deletedAt: new Date(),
+      deletedBy: actor
+    };
+    this.addActivity({
+      actor,
+      actorRole: 'MENTOR',
+      action: 'CERTIFICATE_ARCHIVED',
+      entityType: 'Certificate',
+      entityId: certificate._id,
+      severity: 'HIGH',
+      message: `${certificate.title} upload archived by mentor`,
+      metadata: { certificateId: certificate.certificateId }
+    });
+    return this.decorateCertificate(certificate);
+  },
+  addActivity(payload) {
+    const record = {
+      _id: id(),
+      id: null,
+      ...payload,
+      createdAt: payload.createdAt || new Date()
+    };
+    record.id = record._id;
+    activityLogs.unshift(record);
+    return expose(record);
+  },
+  listActivities({ limit = 30, severity = '', action = '' } = {}) {
+    return activityLogs
+      .filter((log) => (!severity || log.severity === severity) && (!action || log.action === action))
+      .slice(0, Number(limit))
+      .map((log) => ({
+        ...expose(log),
+        actor: expose(users.find((user) => user._id === log.actor)) || log.actor
+      }));
   },
   findPortfolio(slug) {
     const user = users.find((item) => item.publicSlug === slug);

@@ -5,11 +5,14 @@ import {
   Bell,
   BookOpenCheck,
   FileCheck2,
+  FileWarning,
   GraduationCap,
   LayoutDashboard,
   LogOut,
   Menu,
+  RadioTower,
   Search,
+  ShieldCheck,
   UploadCloud,
   UsersRound,
   X
@@ -29,9 +32,13 @@ const studentNav = [
 
 const mentorNav = [
   { label: 'Command', to: '/mentor', icon: BarChart3 },
+  { label: 'Review', to: '/mentor/review', icon: FileWarning },
+  { label: 'Moderation', to: '/mentor/moderation', icon: ShieldCheck },
+  { label: 'Analytics', to: '/mentor/analytics', icon: RadioTower },
   { label: 'Catalog', to: '/mentor/catalog', icon: BookOpenCheck },
   { label: 'Templates', to: '/mentor/templates', icon: BadgeCheck },
-  { label: 'Students', to: '/mentor/students', icon: UsersRound }
+  { label: 'Students', to: '/mentor/students', icon: UsersRound },
+  { label: 'Activity', to: '/mentor/activity', icon: Bell }
 ];
 
 function NavItem({ item, onClick }) {

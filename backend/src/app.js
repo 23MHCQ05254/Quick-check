@@ -19,6 +19,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const apiPrefix = process.env.API_PREFIX || '/api';
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', credentials: true }));
@@ -36,7 +37,7 @@ app.use(
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-app.get('/api/health', (_req, res) => {
+app.get(`${apiPrefix}/health`, (_req, res) => {
   res.json({
     status: 'ok',
     service: 'quickcheck-backend',
@@ -45,15 +46,14 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/catalog', catalogRoutes);
-app.use('/api/certificates', certificateRoutes);
-app.use('/api/mentor', mentorRoutes);
-app.use('/api/portfolio', portfolioRoutes);
-app.use('/api/templates', templateRoutes);
+app.use(`${apiPrefix}/auth`, authRoutes);
+app.use(`${apiPrefix}/catalog`, catalogRoutes);
+app.use(`${apiPrefix}/certificates`, certificateRoutes);
+app.use(`${apiPrefix}/mentor`, mentorRoutes);
+app.use(`${apiPrefix}/portfolio`, portfolioRoutes);
+app.use(`${apiPrefix}/templates`, templateRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
 
 export default app;
-
