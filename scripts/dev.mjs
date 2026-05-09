@@ -7,78 +7,78 @@ let backendPort = null;
 let frontendStarted = false;
 
 const log = (label, data) => {
-  const text = data.toString();
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  for (const line of lines) {
-    process.stdout.write(`[${label}] ${line}\n`);
-  }
+    const text = data.toString();
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    for (const line of lines) {
+        process.stdout.write(`[${label}] ${line}\n`);
+    }
 };
 
 const stopAll = (code = 0) => {
-  for (const child of children) {
-    if (!child.killed) {
-      child.kill();
+    for (const child of children) {
+        if (!child.killed) {
+            child.kill();
+        }
     }
-  }
 
-  process.exit(code);
+    process.exit(code);
 };
 
 process.on('SIGINT', () => stopAll(0));
 process.on('SIGTERM', () => stopAll(0));
 
 const spawnChild = (label, args, env = {}) => {
-  const child = spawn(npmCommand, args, {
-    cwd: process.cwd(),
-    env: { ...process.env, ...env },
-    shell: process.platform === 'win32',
-    windowsHide: true
-  });
+    const child = spawn(npmCommand, args, {
+        cwd: process.cwd(),
+        env: { ...process.env, ...env },
+        shell: process.platform === 'win32',
+        windowsHide: true
+    });
 
-  children.add(child);
+    children.add(child);
 
-  child.stdout.on('data', (data) => {
-    log(label, data);
+    child.stdout.on('data', (data) => {
+        log(label, data);
 
-    if (label === 'backend' && !frontendStarted) {
-      const match = data.toString().match(/API listening on http:\/\/localhost:(\d+)/);
-      if (match) {
-        backendPort = match[1];
-        startFrontend();
-      }
-    }
-  });
+        if (label === 'backend' && !frontendStarted) {
+            const match = data.toString().match(/API listening on http:\/\/localhost:(\d+)/);
+            if (match) {
+                backendPort = match[1];
+                startFrontend();
+            }
+        }
+    });
 
-  child.stderr.on('data', (data) => log(label, data));
+    child.stderr.on('data', (data) => log(label, data));
 
-  child.on('exit', (code, signal) => {
-    children.delete(child);
+    child.on('exit', (code, signal) => {
+        children.delete(child);
 
-    if (signal) {
-      stopAll(0);
-      return;
-    }
+        if (signal) {
+            stopAll(0);
+            return;
+        }
 
-    if (code && code !== 0) {
-      stopAll(code);
-    }
-  });
+        if (code && code !== 0) {
+            stopAll(code);
+        }
+    });
 
-  return child;
+    return child;
 };
 
 const startFrontend = () => {
-  if (frontendStarted || !backendPort) {
-    return;
-  }
+    if (frontendStarted || !backendPort) {
+        return;
+    }
 
-  frontendStarted = true;
-  spawnChild('frontend', ['run', 'dev', '--prefix', 'frontend'], {
-    VITE_API_URL: `http://localhost:${backendPort}/api`,
-    VITE_API_BASE_URL: `http://localhost:${backendPort}/api`
-  });
+    frontendStarted = true;
+    spawnChild('frontend', ['run', 'dev', '--prefix', 'frontend'], {
+        VITE_API_URL: `http://localhost:${backendPort}/api`,
+        VITE_API_BASE_URL: `http://localhost:${backendPort}/api`
+    });
 };
 
 spawnChild('backend', ['run', 'dev', '--prefix', 'backend'], {
-  PORT: '0'
+    PORT: '0'
 });
