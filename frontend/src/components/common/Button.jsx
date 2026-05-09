@@ -1,4 +1,4 @@
-export function Button({ children, variant = 'primary', className = '', type = 'button', as: Component = 'button', ...props }) {
+export function Button({ children, variant = 'primary', className = '', type = 'button', as: Component = 'button', disabled = false, ...props }) {
   const styles = {
     primary:
       'bg-ink text-white shadow-glow hover:-translate-y-0.5 hover:bg-slate-900 dark:bg-white dark:text-ink dark:hover:bg-slate-100',
@@ -8,12 +8,15 @@ export function Button({ children, variant = 'primary', className = '', type = '
     danger: 'bg-cyber-rose text-white hover:-translate-y-0.5'
   };
 
-  const componentProps = Component === 'button' ? { type } : {};
+  const componentProps = Component === 'button' ? { type } : { 'aria-disabled': disabled || undefined, tabIndex: disabled ? -1 : props.tabIndex };
 
   return (
     <Component
       {...componentProps}
-      className={`focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]} ${className}`}
+      className={`focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+        disabled && Component !== 'button' ? 'pointer-events-none opacity-50' : ''
+      } ${styles[variant]} ${className}`}
+      disabled={Component === 'button' ? disabled : undefined}
       {...props}
     >
       {children}

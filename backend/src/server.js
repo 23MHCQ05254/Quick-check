@@ -11,4 +11,3 @@ await connectDatabase();
 app.listen(port, () => {
   console.log(`[quickcheck] API listening on http://localhost:${port}`);
 });
-

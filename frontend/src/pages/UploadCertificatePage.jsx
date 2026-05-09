@@ -1,24 +1,26 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { CheckCircle2, FileUp, Search, ShieldAlert, Sparkles } from 'lucide-react';
+import { ArrowRight, CheckCircle2, FileUp, Search, ShieldAlert, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '../components/common/Button.jsx';
 import { GlassPanel } from '../components/common/GlassPanel.jsx';
 import { Skeleton } from '../components/common/Skeleton.jsx';
 import { StatusBadge } from '../components/common/StatusBadge.jsx';
+import { useCertificationSelection } from '../context/CertificationSelectionContext.jsx';
 import { useAsync } from '../hooks/useAsync.js';
 import { api, uploadCertificate } from '../lib/api.js';
 
 export default function UploadCertificatePage() {
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState(null);
   const [file, setFile] = useState(null);
   const [certificateId, setCertificateId] = useState('');
   const [issueDate, setIssueDate] = useState('');
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const { selectedCertification, selectCertification } = useCertificationSelection();
 
-  const { data: catalog, loading } = useAsync(async () => (await api.get('/catalog/certifications')).data.items, []);
+  const { data: catalog, loading } = useAsync(async () => (await api.get('/catalog/certifications', { params: { limit: 48 } })).data.items, []);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -27,13 +29,13 @@ export default function UploadCertificatePage() {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!selected || !file) return;
+    if (!selectedCertification || !file) return;
     setUploading(true);
     setError('');
     setResult(null);
     try {
       const { data } = await uploadCertificate({
-        certificationId: selected._id || selected.id,
+        certificationId: selectedCertification._id || selectedCertification.id,
         certificateId,
         issueDate,
         certificate: file
@@ -60,17 +62,21 @@ export default function UploadCertificatePage() {
         </div>
 
         <input className="field mt-5" placeholder="Search MongoDB, Cisco, AWS..." value={query} onChange={(event) => setQuery(event.target.value)} />
+        <Button as={Link} to="/student/catalog" variant="secondary" className="mt-3 w-full">
+          Open full catalog
+          <ArrowRight size={16} />
+        </Button>
 
         <div className="no-scrollbar mt-4 max-h-[540px] space-y-3 overflow-auto pr-1">
           {loading && Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-20" />)}
           {!loading &&
             filtered.map((item) => {
-              const active = (selected?._id || selected?.id) === (item._id || item.id);
+              const active = (selectedCertification?._id || selectedCertification?.id) === (item._id || item.id);
               return (
                 <button
                   key={item._id || item.id}
                   type="button"
-                  onClick={() => setSelected(item)}
+                  onClick={() => selectCertification(item)}
                   className={`focus-ring w-full rounded-2xl border p-4 text-left transition ${
                     active
                       ? 'border-cyber-cyan/60 bg-cyan-500/10 shadow-glow'
@@ -112,8 +118,8 @@ export default function UploadCertificatePage() {
           <form className="mt-6 space-y-4" onSubmit={submit}>
             <div className="rounded-2xl border border-slate-900/10 bg-white/55 p-4 dark:border-white/10 dark:bg-white/[0.04]">
               <p className="text-xs font-bold uppercase tracking-normal text-slate-500 dark:text-slate-400">Selected certification</p>
-              <p className="mt-2 font-black text-slate-950 dark:text-white">{selected ? selected.name : 'Choose from catalog'}</p>
-              {selected && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{selected.organization?.name}</p>}
+              <p className="mt-2 font-black text-slate-950 dark:text-white">{selectedCertification ? selectedCertification.name : 'Choose from catalog'}</p>
+              {selectedCertification && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{selectedCertification.organization?.name}</p>}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -130,7 +136,7 @@ export default function UploadCertificatePage() {
 
             {error && <p className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-600 dark:text-rose-300">{error}</p>}
 
-            <Button type="submit" disabled={!selected || !file || uploading} className="w-full">
+            <Button type="submit" disabled={!selectedCertification || !file || uploading} className="w-full">
               <Sparkles size={17} />
               {uploading ? 'Analyzing certificate' : 'Run AI-assisted verification'}
             </Button>
@@ -178,4 +184,3 @@ export default function UploadCertificatePage() {
     </div>
   );
 }
-

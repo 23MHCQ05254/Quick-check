@@ -49,8 +49,7 @@ const fallbackAnalysis = ({ filePath, studentName, certificateId, issueDate, org
 };
 
 export const analyzeCertificateWithAi = async (payload) => {
-  const aiUrl = process.env.AI_SERVICE_URL;
-  if (!aiUrl) return fallbackAnalysis(payload);
+  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
   try {
     const form = new FormData();
@@ -74,20 +73,7 @@ export const analyzeCertificateWithAi = async (payload) => {
 };
 
 export const extractTemplateProfileWithAi = async ({ files, certificationId }) => {
-  const aiUrl = process.env.AI_SERVICE_URL;
-  if (!aiUrl) {
-    return {
-      extractedProfile: {
-        resolution: { width: 1600, height: 1130, aspectRatio: 1.416 },
-        dominantColors: ['#0EA5E9', '#111827', '#F8FAFC'],
-        brightness: 220,
-        edgeDensity: 0.18,
-        textDensity: 0.3,
-        metadata: { trainedSamples: files.length, source: 'backend-fallback' }
-      },
-      thresholds: { nameSimilarity: 78, visualSimilarity: 70, fraudReview: 65, fraudReject: 92 }
-    };
-  }
+  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
   try {
     const form = new FormData();
@@ -117,4 +103,3 @@ export const extractTemplateProfileWithAi = async ({ files, certificationId }) =
 };
 
 export const compareTextForDuplicate = tokenSimilarity;
-

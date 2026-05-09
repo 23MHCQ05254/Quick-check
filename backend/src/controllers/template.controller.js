@@ -25,7 +25,17 @@ export const createCertification = asyncHandler(async (req, res) => {
   }
 
   if (isDemoMode()) {
-    throw new ApiError(501, 'Create certification is available when MongoDB is configured');
+    const organization = demoStore.createOrganization({ name: organizationName });
+    const existingOrganization = organization || demoStore.listOrganizations().find((org) => org.slug === slugify(organizationName, { lower: true, strict: true }));
+    const certification = demoStore.createCertification({
+      organizationId: existingOrganization?._id || existingOrganization?.id,
+      certificateName: certificationName,
+      level,
+      skills
+    });
+    if (!certification) throw new ApiError(404, 'Organization not found');
+    res.status(201).json({ certification });
+    return;
   }
 
   const organizationSlug = slugify(organizationName, { lower: true, strict: true });
@@ -88,6 +98,6 @@ export const trainTemplate = asyncHandler(async (req, res) => {
 
   await TemplateProfile.updateMany({ certification: certification._id, _id: { $ne: template._id } }, { status: 'RETIRED' });
   const populated = await template.populate(['certification', 'organization']);
+  await Certification.findByIdAndUpdate(certification._id, { templateStatus: 'ACTIVE' });
   res.status(201).json({ template: populated, qualityWarning: req.files.length < 5 ? 'Use 5-10 genuine samples for production-ready profiles' : null });
 });
-

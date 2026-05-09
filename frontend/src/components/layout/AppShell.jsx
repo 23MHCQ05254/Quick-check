@@ -3,6 +3,7 @@ import {
   BarChart3,
   BadgeCheck,
   Bell,
+  BookOpenCheck,
   FileCheck2,
   GraduationCap,
   LayoutDashboard,
@@ -21,12 +22,14 @@ import { useAuth } from '../../context/AuthContext.jsx';
 
 const studentNav = [
   { label: 'Dashboard', to: '/student', icon: LayoutDashboard },
+  { label: 'Catalog', to: '/student/catalog', icon: BookOpenCheck },
   { label: 'Upload', to: '/student/upload', icon: UploadCloud },
   { label: 'Certificates', to: '/student/certificates', icon: FileCheck2 }
 ];
 
 const mentorNav = [
   { label: 'Command', to: '/mentor', icon: BarChart3 },
+  { label: 'Catalog', to: '/mentor/catalog', icon: BookOpenCheck },
   { label: 'Templates', to: '/mentor/templates', icon: BadgeCheck },
   { label: 'Students', to: '/mentor/students', icon: UsersRound }
 ];
@@ -168,4 +171,3 @@ export function AppShell() {
     </div>
   );
 }
-

@@ -39,9 +39,9 @@ export default function StudentDashboard() {
             Upload only after choosing the exact certification type. QuickCheck compares every certificate against its selected mentor-trained profile.
           </p>
         </div>
-        <Button as={Link} to="/student/upload" className="self-start md:self-auto">
+        <Button as={Link} to="/student/catalog" className="self-start md:self-auto">
           <UploadCloud size={17} />
-          Upload certificate
+          Browse catalog
         </Button>
       </div>
 
