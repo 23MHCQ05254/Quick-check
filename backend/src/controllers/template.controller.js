@@ -1,0 +1,93 @@
+import slugify from 'slugify';
+import { isDemoMode } from '../config/db.js';
+import Certification from '../models/Certification.js';
+import Organization from '../models/Organization.js';
+import TemplateProfile from '../models/TemplateProfile.js';
+import { demoStore } from '../services/demoStore.js';
+import { extractTemplateProfileWithAi } from '../services/ai.service.js';
+import { ApiError } from '../utils/apiError.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+
+export const listTemplates = asyncHandler(async (_req, res) => {
+  if (isDemoMode()) {
+    res.json({ items: demoStore.listTemplates() });
+    return;
+  }
+
+  const items = await TemplateProfile.find().populate(['certification', 'organization']).sort({ updatedAt: -1 });
+  res.json({ items });
+});
+
+export const createCertification = asyncHandler(async (req, res) => {
+  const { organizationName, certificationName, level, skills = [] } = req.body;
+  if (!organizationName || !certificationName) {
+    throw new ApiError(400, 'Organization and certification names are required');
+  }
+
+  if (isDemoMode()) {
+    throw new ApiError(501, 'Create certification is available when MongoDB is configured');
+  }
+
+  const organizationSlug = slugify(organizationName, { lower: true, strict: true });
+  const organization = await Organization.findOneAndUpdate(
+    { slug: organizationSlug },
+    { name: organizationName, slug: organizationSlug, active: true },
+    { upsert: true, new: true }
+  );
+
+  const certificationSlug = slugify(certificationName, { lower: true, strict: true });
+  const certification = await Certification.findOneAndUpdate(
+    { organization: organization._id, slug: certificationSlug },
+    {
+      organization: organization._id,
+      name: certificationName,
+      slug: certificationSlug,
+      level,
+      skills,
+      active: true
+    },
+    { upsert: true, new: true }
+  ).populate('organization');
+
+  res.status(201).json({ certification });
+});
+
+export const trainTemplate = asyncHandler(async (req, res) => {
+  const { certificationId } = req.body;
+  if (!certificationId) throw new ApiError(400, 'Certification ID is required');
+  if (!req.files?.length) throw new ApiError(400, 'Reference certificate samples are required');
+
+  const profile = await extractTemplateProfileWithAi({ files: req.files, certificationId });
+
+  if (isDemoMode()) {
+    const template = demoStore.upsertTemplate(
+      certificationId,
+      profile,
+      req.user._id,
+      req.files.map((file) => ({ originalName: file.originalname, fileUrl: `/uploads/${file.filename}` }))
+    );
+    if (!template) throw new ApiError(404, 'Certification not found');
+    res.status(201).json({ template, qualityWarning: req.files.length < 5 ? 'Use 5-10 genuine samples for production-ready profiles' : null });
+    return;
+  }
+
+  const certification = await Certification.findById(certificationId).populate('organization');
+  if (!certification) throw new ApiError(404, 'Certification not found');
+
+  const current = await TemplateProfile.findOne({ certification: certification._id }).sort({ version: -1 });
+  const template = await TemplateProfile.create({
+    certification: certification._id,
+    organization: certification.organization._id,
+    createdBy: req.user._id,
+    version: (current?.version || 0) + 1,
+    status: 'ACTIVE',
+    samples: req.files.map((file) => ({ originalName: file.originalname, fileUrl: `/uploads/${file.filename}` })),
+    extractedProfile: profile.extractedProfile,
+    thresholds: profile.thresholds
+  });
+
+  await TemplateProfile.updateMany({ certification: certification._id, _id: { $ne: template._id } }, { status: 'RETIRED' });
+  const populated = await template.populate(['certification', 'organization']);
+  res.status(201).json({ template: populated, qualityWarning: req.files.length < 5 ? 'Use 5-10 genuine samples for production-ready profiles' : null });
+});
+
