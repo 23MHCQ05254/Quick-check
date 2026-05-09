@@ -21,8 +21,42 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const apiPrefix = process.env.API_PREFIX || '/api';
 
+const isLocalhostOrigin = (origin) => {
+  if (!origin) {
+    return true;
+  }
+
+  try {
+    const url = new URL(origin);
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return false;
+    }
+
+    return ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+};
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', credentials: true }));
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+        return;
+      }
+
+      if (isLocalhostOrigin(origin) || origin === process.env.FRONTEND_URL) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`CORS origin not allowed: ${origin || 'unknown'}`));
+    },
+    credentials: true
+  })
+);
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));

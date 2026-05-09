@@ -13,7 +13,7 @@ const signToken = (user) =>
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 
-const sanitizeUser = (user) => {
+  const sanitizeUser = (user) => {
   const plain = typeof user.toJSON === 'function' ? user.toJSON() : { ...user };
   delete plain.password;
   return plain;

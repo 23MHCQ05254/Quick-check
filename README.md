@@ -25,6 +25,8 @@ Run the backend and frontend:
 npm run dev
 ```
 
+The root dev command now starts the backend on a free port automatically and passes that API URL into the frontend, so it still works even if `5000` or `5173` are already in use on your machine.
+
 Run the AI service separately:
 
 ```bash
