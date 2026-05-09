@@ -47,6 +47,11 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     fuzz = None
 
+try:
+    from utils.db import MongoDBManager
+except ImportError:
+    MongoDBManager = None
+
 app = FastAPI(title="QuickCheck AI Service", version="1.0.0")
 
 app.add_middleware(
@@ -443,3 +448,83 @@ def extract_template_profile(
         "thresholds": {"nameSimilarity": 78, "visualSimilarity": 70, "fraudReview": 65, "fraudReject": 92},
     }
 
+
+@app.get("/templates/list")
+def list_templates() -> dict[str, Any]:
+    """List all learned template profiles."""
+    if not MongoDBManager:
+        return {"templates": [], "error": "MongoDB not configured"}
+
+    try:
+        db = MongoDBManager()
+        if not db.connect():
+            return {"templates": [], "error": "MongoDB connection failed"}
+
+        templates = db.list_templates()
+        return {
+            "count": len(templates),
+            "templates": [
+                {
+                    "id": str(t.get("_id")),
+                    "certificationId": t.get("certificationId"),
+                    "version": t.get("version"),
+                    "trainedSamples": t.get("metadata", {}).get("trainedSamples"),
+                    "trainingQuality": t.get("metadata", {}).get("trainingQuality"),
+                    "trainedAt": t.get("metadata", {}).get("trainedAt"),
+                }
+                for t in templates
+            ],
+        }
+    except Exception as e:
+        return {"templates": [], "error": str(e)}
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+
+@app.get("/templates/{template_id}")
+def get_template(template_id: str) -> dict[str, Any]:
+    """Retrieve complete template profile by ID."""
+    if not MongoDBManager:
+        return {"error": "MongoDB not configured"}
+
+    try:
+        from bson import ObjectId
+
+        db = MongoDBManager()
+        if not db.connect():
+            return {"error": "MongoDB connection failed"}
+
+        template = db.db.template_profiles.find_one({"_id": ObjectId(template_id)})
+        if not template:
+            return {"error": "Template not found"}
+
+        # Get components
+        components = list(db.db.template_components.find({"templateId": template_id}))
+
+        # Get relationships
+        rels = db.db.template_relationships.find_one({"templateId": template_id})
+        relationships = rels.get("relationships", []) if rels else []
+
+        # Get hashes
+        hashes_doc = db.db.template_hashes.find_one({"templateId": template_id})
+        hashes = hashes_doc.get("hashes", {}) if hashes_doc else {}
+
+        return {
+            "id": str(template["_id"]),
+            "extractedProfile": template.get("extractedProfile", {}),
+            "components": [{"_id": None, **c} for c in components],
+            "relationships": relationships,
+            "hashes": hashes,
+            "thresholds": template.get("thresholds", {}),
+            "metadata": template.get("metadata", {}),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass

@@ -67,6 +67,8 @@ for (const [orgName, certName, level, difficultyLevel, category, verificationTyp
     { upsert: true, new: true }
   );
 
+  
+
   const existingTemplate = await TemplateProfile.findOne({ certification: certification._id, status: 'ACTIVE' });
   if (!existingTemplate) {
     await TemplateProfile.create({
