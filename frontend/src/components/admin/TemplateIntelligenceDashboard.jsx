@@ -118,8 +118,8 @@ export default function TemplateIntelligenceDashboard() {
                                     key={template._id}
                                     onClick={() => loadTemplateDetails(template)}
                                     className={`w-full p-3 rounded-lg text-left transition-all ${selectedTemplate?._id === template._id
-                                            ? 'bg-cyan-500/20 border border-cyan-400'
-                                            : 'bg-slate-700/30 border border-slate-600 hover:bg-slate-700/50'
+                                        ? 'bg-cyan-500/20 border border-cyan-400'
+                                        : 'bg-slate-700/30 border border-slate-600 hover:bg-slate-700/50'
                                         }`}
                                 >
                                     <p className="font-semibold text-white truncate">

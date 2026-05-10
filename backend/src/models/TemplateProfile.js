@@ -18,7 +18,7 @@ const templateProfileSchema = new mongoose.Schema(
         imageHash: String
       }
     ],
-    
+
     // Learned template payload from the AI service. Stored as Mixed so the
     // full extracted structure (components, relationships, hashes, metadata)
     // survives MongoDB persistence without schema stripping.
