@@ -7,7 +7,7 @@ import TemplateProfile from '../models/TemplateProfile.js';
 import User from '../models/User.js';
 import { analyzeCertificateWithAi } from '../services/ai.service.js';
 import { recordActivity } from '../services/activity.service.js';
-import { demoStore } from '../services/demoStore.js';
+import { demoStore } from '../services/dataAdapter.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { parsePagination, regexSearch } from '../utils/catalog.js';
@@ -161,20 +161,18 @@ const decorateStudent = (student, certificates) => {
 
 const getAllCertificates = async () =>
   isDemoMode()
-    ? demoStore.listAllCertificates()
+    ? await demoStore.listAllCertificates()
     : Certificate.find({ 'moderation.deletedAt': { $exists: false } }).populate(['student', 'certification', 'organization']).sort({ createdAt: -1 });
 
 const getAllStudents = async () =>
   isDemoMode()
-    ? demoStore.users.filter((user) => user.role === 'STUDENT').map((user) => ({ ...user, password: undefined }))
+    ? demoStore._inMemory.users.filter((user) => user.role === 'STUDENT').map((user) => ({ ...user, password: undefined }))
     : User.find({ role: 'STUDENT' }).sort({ createdAt: -1 });
 
 export const dashboard = asyncHandler(async (_req, res) => {
   const certificates = await getAllCertificates();
   const students = await getAllStudents();
-  const templates = isDemoMode()
-    ? demoStore.templates.filter((template) => template.status === 'ACTIVE')
-    : await TemplateProfile.find({ status: 'ACTIVE' });
+  const templates = isDemoMode() ? (await demoStore.listTemplates()).filter((template) => template.status === 'ACTIVE') : await TemplateProfile.find({ status: 'ACTIVE' });
 
   res.json({
     summary: { ...summarize(certificates, students), activeTemplates: templates.length },
@@ -184,18 +182,16 @@ export const dashboard = asyncHandler(async (_req, res) => {
     organizationStats: organizationStats(certificates),
     departmentStats: departmentStats(students, certificates),
     notifications: buildNotifications(certificates),
-    activity: isDemoMode() ? demoStore.listActivities({ limit: 8 }) : await ActivityLog.find().populate('actor').sort({ createdAt: -1 }).limit(8)
+    activity: isDemoMode() ? await demoStore.listActivities({ limit: 8 }) : await ActivityLog.find().populate('actor').sort({ createdAt: -1 }).limit(8)
   });
 });
 
 export const commandCenter = asyncHandler(async (_req, res) => {
   const certificates = await getAllCertificates();
   const students = await getAllStudents();
-  const templates = isDemoMode()
-    ? demoStore.templates.filter((template) => template.status === 'ACTIVE')
-    : await TemplateProfile.find({ status: 'ACTIVE' });
-  const organizations = isDemoMode() ? demoStore.listOrganizations(true) : await Organization.find({ active: true });
-  const certifications = isDemoMode() ? demoStore.listCatalog({ limit: 48 }).items : await Certification.find({ active: true }).populate('organization').limit(80);
+  const templates = isDemoMode() ? (await demoStore.listTemplates()).filter((template) => template.status === 'ACTIVE') : await TemplateProfile.find({ status: 'ACTIVE' });
+  const organizations = isDemoMode() ? await demoStore.listOrganizations(true) : await Organization.find({ active: true });
+  const certifications = isDemoMode() ? (await demoStore.listCatalog({ limit: 48 })).items : await Certification.find({ active: true }).populate('organization').limit(80);
   const decoratedStudents = students.map((student) => decorateStudent(student, certificates));
 
   res.json({
@@ -210,7 +206,7 @@ export const commandCenter = asyncHandler(async (_req, res) => {
       .slice(0, 8),
     reviewQueue: certificates.filter((cert) => cert.status === 'REVIEW_REQUIRED' || certificateRisk(cert) >= 65).slice(0, 8),
     notifications: buildNotifications(certificates),
-    activity: isDemoMode() ? demoStore.listActivities({ limit: 12 }) : await ActivityLog.find().populate('actor').sort({ createdAt: -1 }).limit(12)
+    activity: isDemoMode() ? await demoStore.listActivities({ limit: 12 }) : await ActivityLog.find().populate('actor').sort({ createdAt: -1 }).limit(12)
   });
 });
 
@@ -270,7 +266,7 @@ export const listCertificates = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
 
   if (isDemoMode()) {
-    let items = demoStore.listAllCertificates();
+    let items = await demoStore.listAllCertificates();
     if (req.query.status) items = items.filter((certificate) => certificate.status === req.query.status);
     if (req.query.risk === 'high') items = items.filter((certificate) => certificateRisk(certificate) >= 65);
     if (req.query.search) {
@@ -291,9 +287,9 @@ export const listCertificates = asyncHandler(async (req, res) => {
   const items = await Certificate.find(query).populate(['student', 'certification', 'organization']).sort({ createdAt: -1 });
   const filtered = req.query.search
     ? items.filter((certificate) => {
-        const search = regexSearch(req.query.search.toString());
-        return search.test(`${certificate.title} ${certificate.student?.name || ''} ${certificate.organization?.name || ''}`);
-      })
+      const search = regexSearch(req.query.search.toString());
+      return search.test(`${certificate.title} ${certificate.student?.name || ''} ${certificate.organization?.name || ''}`);
+    })
     : items;
 
   res.json({
@@ -310,7 +306,7 @@ export const reviewCertificate = asyncHandler(async (req, res) => {
   }
 
   if (isDemoMode()) {
-    const certificate = demoStore.reviewCertificate(req.params.id, {
+    const certificate = await demoStore.reviewCertificate(req.params.id, {
       status,
       reviewNotes,
       overrideReason,
@@ -354,7 +350,7 @@ export const moderateCertificate = asyncHandler(async (req, res) => {
   if (req.body.status && !allowed.includes(req.body.status)) throw new ApiError(400, 'Invalid certificate status');
 
   if (isDemoMode()) {
-    const certificate = demoStore.moderateCertificate(req.params.id, { ...req.body, actor: req.user._id });
+    const certificate = await demoStore.moderateCertificate(req.params.id, { ...req.body, actor: req.user._id });
     if (!certificate) throw new ApiError(404, 'Certificate not found');
     res.json({ certificate });
     return;
@@ -386,7 +382,7 @@ export const moderateCertificate = asyncHandler(async (req, res) => {
 
 export const rerunAnalysis = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
-    const certificate = demoStore.rerunCertificate(req.params.id, req.user._id);
+    const certificate = await demoStore.rerunCertificate(req.params.id, req.user._id);
     if (!certificate) throw new ApiError(404, 'Certificate not found');
     res.json({ certificate });
     return;
@@ -430,7 +426,7 @@ export const rerunAnalysis = asyncHandler(async (req, res) => {
 
 export const deleteCertificate = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
-    const certificate = demoStore.deleteCertificate(req.params.id, req.user._id);
+    const certificate = await demoStore.deleteCertificate(req.params.id, req.user._id);
     if (!certificate) throw new ApiError(404, 'Certificate not found');
     res.json({ certificate });
     return;
@@ -513,7 +509,8 @@ export const activityLogs = asyncHandler(async (req, res) => {
   const limit = Math.min(100, Number(req.query.limit) || 30);
 
   if (isDemoMode()) {
-    res.json({ items: demoStore.listActivities({ limit, severity: req.query.severity, action: req.query.action }) });
+    const items = await demoStore.listActivities({ limit, severity: req.query.severity, action: req.query.action });
+    res.json({ items });
     return;
   }
 

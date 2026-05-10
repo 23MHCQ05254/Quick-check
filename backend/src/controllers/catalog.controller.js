@@ -4,7 +4,7 @@ import Certificate from '../models/Certificate.js';
 import Certification from '../models/Certification.js';
 import Organization from '../models/Organization.js';
 import TemplateProfile from '../models/TemplateProfile.js';
-import { demoStore } from '../services/demoStore.js';
+import { demoStore } from '../services/dataAdapter.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { CATEGORIES, DIFFICULTY_LEVELS, normalizeSkills, parsePagination, regexSearch, TEMPLATE_STATUSES, VERIFICATION_TYPES } from '../utils/catalog.js';
@@ -66,7 +66,7 @@ const decorateCertifications = async (certifications) => {
 
 export const listCatalog = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
-    const result = demoStore.listCatalog(req.query);
+    const result = await demoStore.listCatalog(req.query);
     res.json(result);
     return;
   }
@@ -86,7 +86,7 @@ export const listCatalog = asyncHandler(async (req, res) => {
 
 export const getCertification = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
-    const certification = demoStore.findCertification(req.params.id);
+    const certification = await demoStore.findCertification(req.params.id);
     if (!certification) throw new ApiError(404, 'Certification not found');
     res.json({ certification });
     return;
@@ -105,7 +105,8 @@ export const listOrganizations = asyncHandler(async (req, res) => {
   const includeStats = req.query.includeStats === 'true';
 
   if (isDemoMode()) {
-    res.json({ items: demoStore.listOrganizations(includeStats) });
+    const items = await demoStore.listOrganizations(includeStats);
+    res.json({ items });
     return;
   }
 
@@ -140,7 +141,8 @@ export const listOrganizations = asyncHandler(async (req, res) => {
 
 export const catalogFacets = asyncHandler(async (_req, res) => {
   if (isDemoMode()) {
-    res.json(demoStore.facets());
+    const f = await demoStore.facets();
+    res.json(f);
     return;
   }
 
@@ -165,7 +167,7 @@ export const catalogFacets = asyncHandler(async (_req, res) => {
 
 export const createOrganization = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
-    const organization = demoStore.createOrganization(req.body);
+    const organization = await demoStore.createOrganization(req.body);
     if (!organization) throw new ApiError(409, 'Organization already exists');
     res.status(201).json({ organization });
     return;
@@ -191,7 +193,7 @@ export const createOrganization = asyncHandler(async (req, res) => {
 
 export const updateOrganization = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
-    const organization = demoStore.updateOrganization(req.params.id, req.body);
+    const organization = await demoStore.updateOrganization(req.params.id, req.body);
     if (!organization) throw new ApiError(404, 'Organization not found');
     res.json({ organization });
     return;
@@ -206,7 +208,7 @@ export const updateOrganization = asyncHandler(async (req, res) => {
 
 export const deleteOrganization = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
-    const organization = demoStore.deleteOrganization(req.params.id);
+    const organization = await demoStore.deleteOrganization(req.params.id);
     if (!organization) throw new ApiError(404, 'Organization not found');
     res.json({ organization });
     return;
@@ -220,7 +222,7 @@ export const deleteOrganization = asyncHandler(async (req, res) => {
 
 export const createCertification = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
-    const certification = demoStore.createCertification(req.body);
+    const certification = await demoStore.createCertification(req.body);
     if (!certification) throw new ApiError(404, 'Organization not found');
     res.status(201).json({ certification });
     return;
@@ -251,7 +253,7 @@ export const createCertification = asyncHandler(async (req, res) => {
 
 export const updateCertification = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
-    const certification = demoStore.updateCertification(req.params.id, req.body);
+    const certification = await demoStore.updateCertification(req.params.id, req.body);
     if (!certification) throw new ApiError(404, 'Certification not found');
     res.json({ certification });
     return;
@@ -277,7 +279,7 @@ export const updateCertification = asyncHandler(async (req, res) => {
 
 export const deleteCertification = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
-    const certification = demoStore.deleteCertification(req.params.id);
+    const certification = await demoStore.deleteCertification(req.params.id);
     if (!certification) throw new ApiError(404, 'Certification not found');
     res.json({ certification });
     return;

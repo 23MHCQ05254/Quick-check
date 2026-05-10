@@ -190,14 +190,26 @@ const certifications = [
   }
 ].map((cert) => ({ ...cert, id: cert._id }));
 
-const profileFor = (certificationId, organizationId, palette) => ({
+const computeThresholds = (trainedSamples = 0) => {
+  // Derive thresholds from available trained sample count.
+  // More samples => stricter thresholds and narrower review window.
+  const baseName = 60;
+  const baseVisual = 55;
+  const nameSimilarity = Math.min(98, baseName + Math.round(Math.min(trainedSamples, 10) * 3.5));
+  const visualSimilarity = Math.min(96, baseVisual + Math.round(Math.min(trainedSamples, 10) * 3));
+  const fraudReview = Math.max(50, 80 - Math.round(Math.min(trainedSamples, 10) * 1.5));
+  const fraudReject = Math.min(98, fraudReview + 30);
+  return { nameSimilarity, visualSimilarity, fraudReview, fraudReject };
+};
+
+const profileFor = (certificationId, organizationId, palette, trainedSamples = 8) => ({
   _id: id(),
   certification: certificationId,
   organization: organizationId,
   status: 'ACTIVE',
   version: 1,
   samples: [],
-  thresholds: { nameSimilarity: 78, visualSimilarity: 70, fraudReview: 65, fraudReject: 92 },
+  thresholds: computeThresholds(trainedSamples),
   extractedProfile: {
     resolution: { width: 1600, height: 1130, aspectRatio: 1.416 },
     dominantColors: palette,
@@ -210,7 +222,7 @@ const profileFor = (certificationId, organizationId, palette) => ({
       { label: 'student_name', x: 420, y: 470, width: 760, height: 80 },
       { label: 'certificate_id', x: 1040, y: 965, width: 280, height: 42 }
     ],
-    metadata: { trainedSamples: 8, trainingQuality: 'demo-reference' }
+    metadata: { trainedSamples, trainingQuality: 'demo-reference' }
   }
 });
 
@@ -225,6 +237,41 @@ const templates = certifications.map((cert, index) =>
   ][index]
   )
 );
+
+const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
+
+const computeAnalysis = ({ certificateId = '', studentName = '', certificationId = '' } = {}) => {
+  const template = templates.find((t) => t.certification === certificationId) || null;
+  const thresholds = template?.thresholds || computeThresholds(0);
+  const seedHex = crypto.createHash('sha256').update(`${certificateId}:${studentName}`).digest('hex').slice(0, 8);
+  const seed = parseInt(seedHex, 16) || 0;
+
+  const jitter = (seed % 21) - 10; // -10..10
+  const nameSimilarity = clamp((thresholds.nameSimilarity || 70) + jitter, 40, 100);
+  const visualSimilarity = clamp((thresholds.visualSimilarity || 65) + Math.round(jitter * 0.8), 30, 100);
+  const avg = (nameSimilarity + visualSimilarity) / 2;
+  const fraudProbability = clamp(Math.round(100 - avg + (seed % 7) - 3), 0, 99);
+  const confidence = clamp(50 + Math.round(avg / 2), 40, 99);
+
+  const suspiciousIndicators = [];
+  const anomalies = [];
+  if (nameSimilarity < thresholds.nameSimilarity) suspiciousIndicators.push('Student name similarity is below threshold');
+  if (visualSimilarity < thresholds.visualSimilarity) suspiciousIndicators.push('Visual profile differs from template reference');
+  if ((template?.extractedProfile?.qrRegions || []).length === 0) suspiciousIndicators.push('QR region not present in template');
+  if (suspiciousIndicators.length > 0) anomalies.push({ code: 'DEMO_ANALYSIS_FLAGS', severity: suspiciousIndicators.includes('Student name similarity is below threshold') ? 'HIGH' : 'MEDIUM' });
+
+  const recommendation = fraudProbability >= thresholds.fraudReject ? 'REJECT' : fraudProbability >= thresholds.fraudReview ? 'MENTOR_REVIEW' : 'LOW_RISK';
+
+  return {
+    fraudProbability,
+    confidence,
+    nameSimilarity,
+    visualSimilarity,
+    suspiciousIndicators,
+    anomalies,
+    recommendation
+  };
+};
 
 const users = [
   {
@@ -327,15 +374,7 @@ const certificates = [
     textFingerprint: 'associate certificate developer id janga joseph mongodb raju',
     imageHash: 'demo-hash-mongodb-1042',
     status: 'VERIFIED',
-    analysis: {
-      fraudProbability: 12,
-      confidence: 88,
-      nameSimilarity: 96,
-      visualSimilarity: 91,
-      suspiciousIndicators: [],
-      anomalies: [],
-      recommendation: 'LOW_RISK'
-    },
+    analysis: computeAnalysis({ certificateId: 'MDB-DEV-2026-1042', studentName: 'Joseph Raju Janga', certificationId: certifications[0]._id }),
     createdAt: new Date('2026-01-13'),
     updatedAt: new Date('2026-01-14')
   },
@@ -357,17 +396,7 @@ const certificates = [
     imageHash: 'demo-hash-aws-2210',
     status: 'PENDING',
     locked: false,
-    analysis: {
-      fraudProbability: 28,
-      confidence: 82,
-      nameSimilarity: 91,
-      visualSimilarity: 84,
-      trustScore: 77,
-      riskLevel: 'LOW',
-      suspiciousIndicators: [],
-      anomalies: [],
-      recommendation: 'LOW_RISK'
-    },
+    analysis: computeAnalysis({ certificateId: 'AWS-CCP-2026-2210', studentName: 'Meera Nanduri', certificationId: certifications[2]._id }),
     createdAt: new Date('2026-02-19'),
     updatedAt: new Date('2026-02-19')
   },
@@ -389,17 +418,7 @@ const certificates = [
     imageHash: 'demo-hash-cisco-8891',
     status: 'REVIEW_REQUIRED',
     locked: false,
-    analysis: {
-      fraudProbability: 74,
-      confidence: 69,
-      nameSimilarity: 67,
-      visualSimilarity: 62,
-      trustScore: 38,
-      riskLevel: 'HIGH',
-      suspiciousIndicators: ['Student name similarity is below threshold', 'QR data was not detected', 'Visual profile differs from template reference'],
-      anomalies: [{ code: 'NAME_MISMATCH', severity: 'HIGH' }],
-      recommendation: 'MENTOR_REVIEW'
-    },
+    analysis: computeAnalysis({ certificateId: 'CYB-OPS-2026-8891', studentName: 'Arjun Varma', certificationId: certifications[1]._id }),
     createdAt: new Date('2026-03-09'),
     updatedAt: new Date('2026-03-09')
   },
@@ -421,17 +440,7 @@ const certificates = [
     imageHash: 'demo-hash-gda-4117',
     status: 'VERIFIED',
     locked: false,
-    analysis: {
-      fraudProbability: 9,
-      confidence: 92,
-      nameSimilarity: 98,
-      visualSimilarity: 93,
-      trustScore: 94,
-      riskLevel: 'LOW',
-      suspiciousIndicators: [],
-      anomalies: [],
-      recommendation: 'LOW_RISK'
-    },
+    analysis: computeAnalysis({ certificateId: 'GDA-2026-4117', studentName: 'Nisha Iyer', certificationId: certifications[3]._id }),
     createdAt: new Date('2026-04-23'),
     updatedAt: new Date('2026-04-24')
   }
@@ -462,7 +471,7 @@ const activityLogs = [
     entityId: certificates[0]._id,
     severity: 'LOW',
     message: 'Joseph Raju Janga uploaded MongoDB Associate Developer',
-    metadata: { fraudProbability: 12 },
+    metadata: { fraudProbability: certificates[0].analysis?.fraudProbability ?? null },
     createdAt: new Date('2026-01-13T09:15:00.000Z')
   },
   {
@@ -691,7 +700,7 @@ export const demoStore = {
       version: (existing?.version || 0) + 1,
       createdBy: mentorId,
       samples,
-      thresholds: profile.thresholds || { nameSimilarity: 78, visualSimilarity: 70, fraudReview: 65, fraudReject: 92 },
+      thresholds: profile.thresholds || computeThresholds(profile?.extractedProfile?.metadata?.trainedSamples || samples.length || 0),
       extractedProfile: profile.extractedProfile || profile
     };
 

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
 import process from 'node:process';
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -73,9 +74,13 @@ const startFrontend = () => {
     }
 
     frontendStarted = true;
+    const apiUrl = `http://localhost:${backendPort}/api`;
+    writeFile('frontend/.env.local', `VITE_API_URL=${apiUrl}\nVITE_API_BASE_URL=${apiUrl}\n`, 'utf8').catch((error) => {
+        log('dev', `Unable to write frontend/.env.local: ${error.message}`);
+    });
     spawnChild('frontend', ['run', 'dev', '--prefix', 'frontend'], {
-        VITE_API_URL: `http://localhost:${backendPort}/api`,
-        VITE_API_BASE_URL: `http://localhost:${backendPort}/api`
+        VITE_API_URL: apiUrl,
+        VITE_API_BASE_URL: apiUrl
     });
 };
 

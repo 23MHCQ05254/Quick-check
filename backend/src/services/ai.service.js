@@ -12,39 +12,47 @@ const fallbackHash = (filePath) => {
   }
 };
 
-const fallbackAnalysis = ({ filePath, studentName, certificateId, issueDate, organizationName, templateProfile }) => {
-  const template = templateProfile?.extractedProfile || templateProfile || {};
-  const hasTemplate = Boolean(template?.resolution || template?.dominantColors);
-  const nameSimilarity = studentName ? 94 : 0;
-  const visualSimilarity = hasTemplate ? 82 : 50;
-  const suspiciousIndicators = [];
-  const anomalies = [];
-
-  if (!hasTemplate) {
-    suspiciousIndicators.push('No active reference template profile found for the selected certification');
-    anomalies.push({ code: 'TEMPLATE_MISSING', severity: 'HIGH', message: 'Selected certification does not have an active template profile' });
-  }
-
-  const fraudProbability = hasTemplate ? 24 : 72;
-
+/**
+ * REAL DYNAMIC ANALYSIS - No hardcoded fraud scores
+ * 
+ * The fallback now returns a meaningful error instead of fake data.
+ * This forces proper AI service configuration and real analysis.
+ */
+const unsupportedFallback = ({ filePath, studentName, certificateId, issueDate, organizationName, templateProfile }) => {
+  console.warn(
+    '[quickcheck-ai] Real analysis requires AI service. ' +
+    'Returning error response to enforce dynamic analysis. ' +
+    'AI_SERVICE_URL=' + (process.env.AI_SERVICE_URL || 'not configured')
+  );
+  
   return {
-    fraudProbability,
-    confidence: hasTemplate ? 68 : 42,
-    nameSimilarity,
-    visualSimilarity,
+    fraudProbability: null,
+    confidence: null,
+    nameSimilarity: null,
+    visualSimilarity: null,
     qrData: '',
-    ocrText: `${organizationName || ''} ${studentName || ''} ${certificateId || ''}`.trim(),
+    ocrText: '',
     imageHash: fallbackHash(filePath),
-    textFingerprint: textFingerprint(`${organizationName || ''} ${studentName || ''} ${certificateId || ''}`),
+    textFingerprint: '',
     extractedFields: {
       certificateId,
       issueDate,
       organization: organizationName,
       studentName
     },
-    suspiciousIndicators,
-    anomalies,
-    recommendation: fraudProbability >= 65 ? 'MENTOR_REVIEW' : 'LOW_RISK'
+    suspiciousIndicators: [
+      'AI Service unavailable - Analysis requires real service connection',
+      'Dynamic analysis cannot be performed without proper AI service'
+    ],
+    anomalies: [
+      {
+        code: 'AI_SERVICE_UNAVAILABLE',
+        severity: 'CRITICAL',
+        message: 'Real certificate analysis requires connected AI service. Please ensure AI_SERVICE_URL is configured and service is running.'
+      }
+    ],
+    recommendation: 'MENTOR_REVIEW',
+    error: 'REAL_ANALYSIS_REQUIRED'
   };
 };
 
@@ -65,13 +73,22 @@ export const analyzeCertificateWithAi = async (payload) => {
       timeout: 30000,
       maxBodyLength: Infinity
     });
+    
+    // Ensure real analysis data is returned
+    if (!data || data.error === 'REAL_ANALYSIS_REQUIRED') {
+      throw new Error('AI service returned unsupported response');
+    }
+    
     return data;
   } catch (error) {
-    console.warn(`[quickcheck] AI service unavailable, using local fallback: ${error.message}`);
-    return fallbackAnalysis(payload);
+    console.error(`[quickcheck-ai] Analysis failed: ${error.message}`);
+    return unsupportedFallback(payload);
   }
 };
 
+/**
+ * Extract template profile - enforces real template learning
+ */
 export const extractTemplateProfileWithAi = async ({ files, certificationId }) => {
   const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
@@ -85,20 +102,20 @@ export const extractTemplateProfileWithAi = async ({ files, certificationId }) =
       timeout: 45000,
       maxBodyLength: Infinity
     });
+    
+    // Ensure real template data is returned
+    if (!data || !data.extractedProfile) {
+      throw new Error('AI service returned incomplete template data');
+    }
+    
     return data;
   } catch (error) {
-    console.warn(`[quickcheck] Template extraction fallback: ${error.message}`);
-    return {
-      extractedProfile: {
-        resolution: { width: 1600, height: 1130, aspectRatio: 1.416 },
-        dominantColors: ['#22C55E', '#0F172A', '#F8FAFC'],
-        brightness: 218,
-        edgeDensity: 0.19,
-        textDensity: 0.31,
-        metadata: { trainedSamples: files.length, source: 'backend-fallback' }
-      },
-      thresholds: { nameSimilarity: 78, visualSimilarity: 70, fraudReview: 65, fraudReject: 92 }
-    };
+    console.error(`[quickcheck-ai] Template extraction failed: ${error.message}`);
+    throw new Error(
+      `Real template learning failed: ${error.message}. ` +
+      'Please ensure AI_SERVICE_URL is configured and service is running. ' +
+      `Current URL: ${aiUrl}`
+    );
   }
 };
 

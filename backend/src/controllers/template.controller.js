@@ -3,14 +3,15 @@ import { isDemoMode } from '../config/db.js';
 import Certification from '../models/Certification.js';
 import Organization from '../models/Organization.js';
 import TemplateProfile from '../models/TemplateProfile.js';
-import { demoStore } from '../services/demoStore.js';
+import { demoStore } from '../services/dataAdapter.js';
 import { extractTemplateProfileWithAi } from '../services/ai.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const listTemplates = asyncHandler(async (_req, res) => {
   if (isDemoMode()) {
-    res.json({ items: demoStore.listTemplates() });
+    const items = await demoStore.listTemplates();
+    res.json({ items });
     return;
   }
 
@@ -25,9 +26,10 @@ export const createCertification = asyncHandler(async (req, res) => {
   }
 
   if (isDemoMode()) {
-    const organization = demoStore.createOrganization({ name: organizationName });
-    const existingOrganization = organization || demoStore.listOrganizations().find((org) => org.slug === slugify(organizationName, { lower: true, strict: true }));
-    const certification = demoStore.createCertification({
+    const organization = await demoStore.createOrganization({ name: organizationName });
+    const orgs = await demoStore.listOrganizations();
+    const existingOrganization = organization || orgs.find((org) => org.slug === slugify(organizationName, { lower: true, strict: true }));
+    const certification = await demoStore.createCertification({
       organizationId: existingOrganization?._id || existingOrganization?.id,
       certificateName: certificationName,
       level,
@@ -70,7 +72,7 @@ export const trainTemplate = asyncHandler(async (req, res) => {
   const profile = await extractTemplateProfileWithAi({ files: req.files, certificationId });
 
   if (isDemoMode()) {
-    const template = demoStore.upsertTemplate(
+    const template = await demoStore.upsertTemplate(
       certificationId,
       profile,
       req.user._id,

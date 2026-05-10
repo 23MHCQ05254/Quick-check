@@ -3,7 +3,7 @@ import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { isDemoMode } from '../config/db.js';
 import User from '../models/User.js';
-import { demoStore } from '../services/demoStore.js';
+import { demoStore } from '../services/dataAdapter.js';
 
 export const protect = asyncHandler(async (req, _res, next) => {
   const header = req.headers.authorization || '';
@@ -21,7 +21,7 @@ export const protect = asyncHandler(async (req, _res, next) => {
   }
 
   const user = isDemoMode()
-    ? demoStore.findUserById(payload.id)
+    ? await demoStore.findUserById(payload.id)
     : await User.findById(payload.id).select('-password');
 
   if (!user) {
@@ -34,6 +34,7 @@ export const protect = asyncHandler(async (req, _res, next) => {
 
 export const requireRole = (...roles) => (req, _res, next) => {
   if (!roles.includes(req.user.role)) {
+    console.log(`[auth] Role validation failed. Required=${roles.join(',')} got=${req.user.role}`);
     next(new ApiError(403, 'You do not have permission to perform this action'));
     return;
   }

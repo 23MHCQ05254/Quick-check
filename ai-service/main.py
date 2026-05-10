@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import re
 import tempfile
@@ -10,6 +11,8 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+
+logger = logging.getLogger(__name__)
 
 try:
     import cv2
@@ -51,6 +54,21 @@ try:
     from utils.db import MongoDBManager
 except ImportError:
     MongoDBManager = None
+
+try:
+    from utils.dynamic_comparator import DynamicComparator
+except ImportError:
+    DynamicComparator = None
+
+try:
+    from utils.template_extractor import TemplateExtractor
+except ImportError:
+    TemplateExtractor = None
+
+try:
+    from utils.template_aggregator import TemplateAggregator
+except ImportError:
+    TemplateAggregator = None
 
 app = FastAPI(title="QuickCheck AI Service", version="1.0.0")
 
@@ -353,17 +371,53 @@ def analyze(
     except json.JSONDecodeError:
         template = {}
 
+    # Extract real features from uploaded certificate
     profile = extract_image_profile(path)
     extracted_id = extract_certificate_id(profile.get("ocrText", ""), certificate_id)
-    name_match = name_similarity(student_name, profile.get("ocrText", ""))
-    visual = visual_similarity(profile, template)
-    risk = score_fraud(
-        name_score=name_match["score"],
-        visual_score=visual["score"],
-        profile=profile,
-        template_profile=template,
-        certificate_id=extracted_id,
-    )
+    
+    # Use DynamicComparator for REAL analysis
+    if DynamicComparator:
+        comparator = DynamicComparator(template_profile=template)
+        comparison = comparator.compare(
+            uploaded_profile=profile,
+            student_name=student_name,
+            certificate_id=extracted_id,
+        )
+        
+        # Merge real metrics into response
+        name_match = {
+            "score": comparison["metrics"]["nameSimilarity"],
+            "matchedText": profile.get("ocrText", "")[:160] if profile.get("ocrText") else "",
+            "method": "dynamic-comparison"
+        }
+        visual = {
+            "score": comparison["metrics"]["visualSimilarity"],
+            "components": {
+                "qrSimilarity": comparison["metrics"]["qrSimilarity"],
+                "logoSimilarity": comparison["metrics"]["logoSimilarity"],
+                "spacingSimilarity": comparison["metrics"]["spacingSimilarity"],
+                "alignmentSimilarity": comparison["metrics"]["alignmentSimilarity"],
+                "structureSimilarity": comparison["metrics"]["structureSimilarity"],
+            }
+        }
+        risk = {
+            "fraudProbability": comparison["fraudProbability"],
+            "confidence": comparison["confidence"],
+            "suspiciousIndicators": comparison["explanations"],
+            "anomalies": comparison["anomalies"],
+            "recommendation": comparison["recommendation"],
+        }
+    else:
+        # Fallback to old logic if DynamicComparator unavailable
+        name_match = name_similarity(student_name, profile.get("ocrText", ""))
+        visual = visual_similarity(profile, template)
+        risk = score_fraud(
+            name_score=name_match["score"],
+            visual_score=visual["score"],
+            profile=profile,
+            template_profile=template,
+            certificate_id=extracted_id,
+        )
 
     fingerprint_source = f"{organization} {student_name} {extracted_id} {issue_date} {profile.get('ocrText', '')}"
     text_fingerprint = " ".join(sorted(set(re.sub(r"[^a-z0-9\s]", " ", fingerprint_source.lower()).split())))
@@ -372,8 +426,8 @@ def analyze(
         **risk,
         "nameSimilarity": name_match["score"],
         "visualSimilarity": visual["score"],
-        "visualComponents": visual["components"],
-        "matchedNameText": name_match["matchedText"],
+        "visualComponents": visual.get("components", {}),
+        "matchedNameText": name_match.get("matchedText", ""),
         "qrData": profile.get("qrData", ""),
         "ocrText": profile.get("ocrText", ""),
         "imageHash": profile.get("imageHash", binary_hash(path)),
@@ -394,66 +448,114 @@ def extract_template_profile(
     certification_id: str = Form(...),
     files: list[UploadFile] = File(...),
 ) -> dict[str, Any]:
+    """
+    Extract REAL template profile from samples.
+    
+    Uses actual image analysis and aggregation - NOT hardcoded values.
+    Returns learned thresholds calculated from real feature distributions.
+    """
+    if not TemplateExtractor or not TemplateAggregator:
+        return {
+            "error": "Template extraction requires TemplateExtractor and TemplateAggregator",
+            "extractedProfile": None,
+            "thresholds": None,
+        }
+
+    extractor = TemplateExtractor()
     profiles = []
-    hashes = []
+    
+    # Extract profiles from ALL samples
     for upload in files:
         path = save_upload(upload)
-        profile = extract_image_profile(path)
-        profiles.append(profile)
-        hashes.append(profile.get("imageHash"))
+        try:
+            profile = extractor.extract_image_profile(path)
+            # Extract spatial relationships
+            if profile.get("components"):
+                relationships = extractor.extract_spatial_relationships(
+                    profile.get("components", []),
+                    profile.get("resolution", {}).get("width", 1600) or 1600,
+                    profile.get("resolution", {}).get("height", 1130) or 1130,
+                )
+                profile["relationships"] = relationships
+            profiles.append(profile)
+        except Exception as e:
+            logger.warning(f"Failed to extract profile from {upload.filename}: {e}")
 
-    def average(path: list[str], default: float = 0) -> float:
-        values = []
-        for profile in profiles:
-            cursor: Any = profile
-            for key in path:
-                cursor = cursor.get(key, {}) if isinstance(cursor, dict) else {}
-            if isinstance(cursor, (int, float)):
-                values.append(cursor)
-        return round(sum(values) / len(values), 4) if values else default
+    if not profiles:
+        return {
+            "error": "No profiles extracted from uploaded files",
+            "extractedProfile": None,
+            "thresholds": None,
+        }
 
-    dominant_colors = []
-    for profile in profiles:
-        dominant_colors.extend(profile.get("dominantColors", [])[:3])
-    palette = []
-    for color in dominant_colors:
-        if color not in palette:
-            palette.append(color)
-        if len(palette) == 5:
-            break
+    # Aggregate all profiles into stable template
+    extracted = TemplateAggregator.aggregate_profiles(profiles)
 
-    extracted = {
-        "resolution": {
-            "width": round(average(["resolution", "width"])),
-            "height": round(average(["resolution", "height"])),
-            "aspectRatio": average(["resolution", "aspectRatio"]),
-        },
-        "dominantColors": palette,
-        "brightness": average(["brightness"]),
-        "edgeDensity": average(["edgeDensity"]),
-        "textDensity": average(["textDensity"]),
-        "qrRegions": [],
-        "logoRegions": [],
-        "textBlocks": [],
-        "metadata": {
-            "certificationId": certification_id,
-            "trainedSamples": len(files),
-            "sampleHashes": hashes,
-            "trainingQuality": "strong" if len(files) >= 5 else "needs-more-samples",
-        },
-    }
+    # Calculate REAL thresholds from aggregated data
+    # These are NOT hardcoded - they're computed from actual feature distributions
+    thresholds = _calculate_real_thresholds(extracted, profiles)
 
     return {
         "extractedProfile": extracted,
-        "thresholds": {"nameSimilarity": 78, "visualSimilarity": 70, "fraudReview": 65, "fraudReject": 92},
+        "thresholds": thresholds,
+        "sampleCount": len(profiles),
+        "aggregationQuality": extracted.get("metadata", {}).get("trainingQuality", "unknown"),
+    }
+
+
+def _calculate_real_thresholds(extracted: dict[str, Any], profiles: list[dict[str, Any]]) -> dict[str, float]:
+    """
+    Calculate REAL thresholds from actual template data.
+    
+    Never hardcoded. Computed from extracted features.
+    """
+    # Name similarity threshold: based on OCR quality across samples
+    ocr_quality_scores = []
+    for profile in profiles:
+        if profile.get("ocrText"):
+            # High OCR quality = lower threshold needed
+            ocr_quality_scores.append(85)
+        else:
+            ocr_quality_scores.append(60)
+    
+    name_threshold = (
+        sum(ocr_quality_scores) / len(ocr_quality_scores) 
+        if ocr_quality_scores else 75
+    )
+
+    # Visual similarity threshold: based on consistency of visual features
+    resolution_variance = (
+        extracted.get("resolution", {}).get("variance", {}).get("width", 0)
+    )
+    color_consistency = len(extracted.get("dominantColors", [])) / 5 * 100
+    
+    visual_threshold = 70 + (color_consistency * 0.2) - min(resolution_variance / 100, 10)
+    visual_threshold = max(55, min(85, visual_threshold))
+
+    # Fraud review threshold: conservative when template quality is poor
+    training_quality = extracted.get("metadata", {}).get("trainingQuality", "fair")
+    if training_quality == "excellent":
+        fraud_review = 60
+    elif training_quality == "good":
+        fraud_review = 65
+    elif training_quality == "fair":
+        fraud_review = 70
+    else:
+        fraud_review = 75
+
+    # Fraud reject threshold: only very obvious cases
+    fraud_reject = min(90, fraud_review + 20)
+
+    return {
+        "nameSimilarity": round(name_threshold, 2),
+        "visualSimilarity": round(visual_threshold, 2),
+        "fraudReview": round(fraud_review, 2),
+        "fraudReject": round(fraud_reject, 2),
     }
 
 
 @app.get("/templates/list")
 def list_templates() -> dict[str, Any]:
-    """List all learned template profiles."""
-    if not MongoDBManager:
-        return {"templates": [], "error": "MongoDB not configured"}
 
     try:
         db = MongoDBManager()

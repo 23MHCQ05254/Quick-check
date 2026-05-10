@@ -3,7 +3,7 @@ import Certificate from '../models/Certificate.js';
 import Certification from '../models/Certification.js';
 import TemplateProfile from '../models/TemplateProfile.js';
 import { analyzeCertificateWithAi } from '../services/ai.service.js';
-import { demoStore } from '../services/demoStore.js';
+import { demoStore } from '../services/dataAdapter.js';
 import { detectDuplicateCertificate } from '../services/duplicate.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -27,10 +27,10 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
   }
 
   if (isDemoMode()) {
-    const certification = demoStore.findCertification(certificationId);
+    const certification = await demoStore.findCertification(certificationId);
     if (!certification) throw new ApiError(404, 'Certification type not found');
 
-    const template = demoStore.findTemplateByCertification(certification._id);
+    const template = await demoStore.findTemplateByCertification(certification._id);
     if (!template) throw new ApiError(400, 'Selected certification does not have an active template profile');
 
     const analysis = await analyzeCertificateWithAi({
@@ -49,7 +49,7 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
       issueDate
     });
 
-    const record = demoStore.addCertificate({
+    const record = await demoStore.addCertificate({
       student: req.user._id,
       certification: certification._id,
       organization: certification.organization._id,
@@ -73,7 +73,8 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
       }
     });
 
-    res.status(201).json({ certificate: demoStore.decorateCertificate(record) });
+    const decorated = await demoStore.decorateCertificate(record);
+    res.status(201).json({ certificate: decorated });
     return;
   }
 
@@ -124,7 +125,8 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
 
 export const listMyCertificates = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
-    res.json({ items: demoStore.listCertificatesForStudent(req.user._id) });
+    const items = await demoStore.listCertificatesForStudent(req.user._id);
+    res.json({ items });
     return;
   }
 

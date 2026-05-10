@@ -1,13 +1,13 @@
 import { isDemoMode } from '../config/db.js';
 import Certificate from '../models/Certificate.js';
 import User from '../models/User.js';
-import { demoStore } from '../services/demoStore.js';
+import { demoStore } from '../services/dataAdapter.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const publicPortfolio = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
-    const portfolio = demoStore.findPortfolio(req.params.slug);
+    const portfolio = await demoStore.findPortfolio(req.params.slug);
     if (!portfolio) throw new ApiError(404, 'Portfolio not found');
     res.json(portfolio);
     return;

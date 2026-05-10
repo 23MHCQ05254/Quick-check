@@ -17,11 +17,11 @@ export default function AuthPage() {
 
   const [form, setForm] = useState({
     name: '',
-    email: 'student@quickcheck.edu',
-    password: 'password123',
-    department: 'Computer Science',
-    rollNumber: 'QC23CS042',
-    graduationYear: '2027'
+    email: '',
+    password: '',
+    department: '',
+    rollNumber: '',
+    graduationYear: ''
   });
 
   const target = useMemo(() => (user?.role === 'MENTOR' ? '/mentor' : '/student'), [user]);
@@ -38,28 +38,19 @@ export default function AuthPage() {
         mode === 'login'
           ? await login({ email: form.email, password: form.password })
           : await signup({
-              name: form.name,
-              email: form.email,
-              password: form.password,
-              department: form.department,
-              rollNumber: form.rollNumber,
-              graduationYear: Number(form.graduationYear)
-            });
+            name: form.name,
+            email: form.email,
+            password: form.password,
+            department: form.department,
+            rollNumber: form.rollNumber,
+            graduationYear: Number(form.graduationYear)
+          });
       navigate(nextUser.role === 'MENTOR' ? '/mentor' : '/student', { replace: true });
     } catch (err) {
       setError(err.userMessage || err.response?.data?.message || err.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
-  };
-
-  const useDemo = (role) => {
-    setMode('login');
-    setForm((current) => ({
-      ...current,
-      email: role === 'mentor' ? 'mentor@quickcheck.edu' : 'student@quickcheck.edu',
-      password: role === 'mentor' ? 'mentor123' : 'password123'
-    }));
   };
 
   return (
@@ -110,9 +101,8 @@ export default function AuthPage() {
                   setMode(item);
                   setError('');
                 }}
-                className={`focus-ring flex-1 rounded-xl px-4 py-2 text-sm font-bold capitalize transition ${
-                  mode === item ? 'bg-white text-slate-950 shadow-sm dark:bg-ink dark:text-white' : 'text-slate-500 dark:text-slate-300'
-                }`}
+                className={`focus-ring flex-1 rounded-xl px-4 py-2 text-sm font-bold capitalize transition ${mode === item ? 'bg-white text-slate-950 shadow-sm dark:bg-ink dark:text-white' : 'text-slate-500 dark:text-slate-300'
+                  }`}
               >
                 {item}
               </button>
@@ -127,6 +117,7 @@ export default function AuthPage() {
                   <input className="field" placeholder="Department" value={form.department} onChange={(event) => setForm({ ...form, department: event.target.value })} />
                   <input className="field" placeholder="Roll number" value={form.rollNumber} onChange={(event) => setForm({ ...form, rollNumber: event.target.value })} />
                 </div>
+                <input className="field" type="number" placeholder="Graduation year" value={form.graduationYear} onChange={(event) => setForm({ ...form, graduationYear: event.target.value })} />
               </>
             )}
 
@@ -141,18 +132,9 @@ export default function AuthPage() {
             </Button>
           </form>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <Button variant="secondary" onClick={() => useDemo('student')}>
-              Student demo
-            </Button>
-            <Button variant="secondary" onClick={() => useDemo('mentor')}>
-              Mentor demo
-            </Button>
-          </div>
-
           <div className="mt-6 flex items-start gap-3 rounded-2xl border border-slate-900/10 bg-white/55 p-4 text-sm text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300">
             <LockKeyhole className="mt-0.5 shrink-0 text-cyber-green" size={18} />
-            <p>New signups are always students. Mentors are inserted manually in MongoDB or seeded by the institution.</p>
+            <p>New signups are always students. Mentor accounts are managed by the institution.</p>
           </div>
         </GlassPanel>
       </main>

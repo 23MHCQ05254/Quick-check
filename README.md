@@ -132,11 +132,6 @@ uvicorn main:app --reload --port 8000
 
 If `MONGODB_URI` is not configured, the Express API boots in demo mode with seeded organizations, certifications, templates, a student, and a mentor.
 
-Demo accounts:
-
-- Student: `student@quickcheck.edu` / `password123`
-- Mentor: `mentor@quickcheck.edu` / `mentor123`
-
 ## Production Notes
 
 - Create mentors manually in MongoDB or with the seed script. There is intentionally no mentor signup flow.
