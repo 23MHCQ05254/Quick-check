@@ -14,11 +14,11 @@ import {
   rerunAnalysis,
   reviewCertificate
 } from '../controllers/mentor.controller.js';
-import { protect, requireRole } from '../middleware/auth.middleware.js';
+import { mentorOnly, protect } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
-router.use(protect, requireRole('MENTOR'));
+router.use(protect, mentorOnly);
 router.get('/command-center', commandCenter);
 router.get('/dashboard', dashboard);
 router.get('/students', listStudents);

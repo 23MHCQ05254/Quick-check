@@ -24,7 +24,7 @@ export default function AuthPage() {
     graduationYear: ''
   });
 
-  const target = useMemo(() => (user?.role === 'MENTOR' ? '/mentor' : '/student'), [user]);
+  const target = useMemo(() => (user?.role === 'MENTOR' ? '/mentor/dashboard' : '/dashboard'), [user]);
   if (isAuthenticated) return <Navigate to={target} replace />;
 
   const submit = async (event) => {
@@ -45,7 +45,9 @@ export default function AuthPage() {
             rollNumber: form.rollNumber,
             graduationYear: Number(form.graduationYear)
           });
-      navigate(nextUser.role === 'MENTOR' ? '/mentor' : '/student', { replace: true });
+          const redirectTarget = nextUser.role === 'MENTOR' ? '/mentor/dashboard' : '/dashboard';
+          console.log(`[auth.redirect] Login success for role=${nextUser.role}, navigating to ${redirectTarget}`);
+          navigate(redirectTarget, { replace: true });
     } catch (err) {
       setError(err.userMessage || err.response?.data?.message || err.message || 'Authentication failed');
     } finally {

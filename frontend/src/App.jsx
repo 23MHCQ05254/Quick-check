@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell.jsx';
 import { ProtectedRoute } from './components/layout/ProtectedRoute.jsx';
 import AuthPage from './pages/AuthPage.jsx';
@@ -16,6 +16,12 @@ import StudentsPage from './pages/StudentsPage.jsx';
 import TemplateManager from './pages/TemplateManager.jsx';
 import UploadCertificatePage from './pages/UploadCertificatePage.jsx';
 
+function LegacyStudentRedirect() {
+  const { pathname } = useLocation();
+  const target = pathname.replace('/student', '/dashboard');
+  return <Navigate to={target} replace />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -25,7 +31,7 @@ export default function App() {
 
       <Route element={<ProtectedRoute roles={['STUDENT', 'MENTOR']} />}>
         <Route element={<AppShell />}>
-          <Route path="/student" element={<ProtectedRoute roles={['STUDENT']} nested />}>
+          <Route path="/dashboard" element={<ProtectedRoute roles={['STUDENT']} nested />}>
             <Route index element={<StudentDashboard />} />
             <Route path="catalog" element={<CertificationCatalogPage />} />
             <Route path="upload" element={<UploadCertificatePage />} />
@@ -33,7 +39,8 @@ export default function App() {
           </Route>
 
           <Route path="/mentor" element={<ProtectedRoute roles={['MENTOR']} nested />}>
-            <Route index element={<MentorDashboard />} />
+            <Route index element={<Navigate to="/mentor/dashboard" replace />} />
+            <Route path="dashboard" element={<MentorDashboard />} />
             <Route path="review" element={<MentorReviewQueuePage />} />
             <Route path="moderation" element={<CertificateModerationPage />} />
             <Route path="analytics" element={<InstitutionalAnalyticsPage />} />
@@ -44,6 +51,9 @@ export default function App() {
           </Route>
         </Route>
       </Route>
+
+      <Route path="/student" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/student/*" element={<LegacyStudentRedirect />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

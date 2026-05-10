@@ -6,9 +6,11 @@ import { demoStore } from '../services/dataAdapter.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
+const normalizeRole = (role) => String(role || '').toUpperCase();
+
 const signToken = (user) =>
   jwt.sign(
-    { id: user._id?.toString?.() || user.id, role: user.role, email: user.email },
+    { id: user._id?.toString?.() || user.id, role: normalizeRole(user.role), email: user.email },
     process.env.JWT_SECRET || 'quickcheck-local-secret-change-me',
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
@@ -16,6 +18,7 @@ const signToken = (user) =>
 const sanitizeUser = (user) => {
   const plain = typeof user.toJSON === 'function' ? user.toJSON() : { ...user };
   delete plain.password;
+  plain.role = normalizeRole(plain.role);
   return plain;
 };
 
@@ -123,6 +126,9 @@ export const login = asyncHandler(async (req, res) => {
       console.log('[auth.login] Users in database:', allUsers.map(u => u.email));
       throw new ApiError(401, 'Invalid email or password');
     }
+
+    const detectedRole = normalizeRole(user.role);
+    console.log(`[auth.login] Role detection for ${email}: raw=${user.role} normalized=${detectedRole}`);
 
     console.log(`[auth.login] ✓ User found in MongoDB for email: ${email}`);
     console.log(`[auth.login] User details:`, {

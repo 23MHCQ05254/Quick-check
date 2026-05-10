@@ -39,7 +39,7 @@ export default function StudentDashboard() {
             Upload only after choosing the exact certification type. QuickCheck compares every certificate against its selected mentor-trained profile.
           </p>
         </div>
-        <Button as={Link} to="/student/catalog" className="self-start md:self-auto">
+        <Button as={Link} to="/dashboard/catalog" className="self-start md:self-auto">
           <UploadCloud size={17} />
           Browse catalog
         </Button>
@@ -102,7 +102,7 @@ export default function StudentDashboard() {
       <GlassPanel className="p-5">
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm font-black text-slate-950 dark:text-white">Recent certificates</p>
-          <Link className="text-sm font-bold text-cyber-cyan" to="/student/certificates">
+          <Link className="text-sm font-bold text-cyber-cyan" to="/dashboard/certificates">
             View all
           </Link>
         </div>

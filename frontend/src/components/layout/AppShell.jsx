@@ -24,14 +24,14 @@ import { ThemeToggle } from '../common/ThemeToggle.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 
 const studentNav = [
-  { label: 'Dashboard', to: '/student', icon: LayoutDashboard },
-  { label: 'Catalog', to: '/student/catalog', icon: BookOpenCheck },
-  { label: 'Upload', to: '/student/upload', icon: UploadCloud },
-  { label: 'Certificates', to: '/student/certificates', icon: FileCheck2 }
+  { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard, end: true },
+  { label: 'Catalog', to: '/dashboard/catalog', icon: BookOpenCheck },
+  { label: 'Upload', to: '/dashboard/upload', icon: UploadCloud },
+  { label: 'Certificates', to: '/dashboard/certificates', icon: FileCheck2 }
 ];
 
 const mentorNav = [
-  { label: 'Command', to: '/mentor', icon: BarChart3 },
+  { label: 'Command', to: '/mentor/dashboard', icon: BarChart3, end: true },
   { label: 'Review', to: '/mentor/review', icon: FileWarning },
   { label: 'Moderation', to: '/mentor/moderation', icon: ShieldCheck },
   { label: 'Analytics', to: '/mentor/analytics', icon: RadioTower },
@@ -46,7 +46,7 @@ function NavItem({ item, onClick }) {
   return (
     <NavLink
       to={item.to}
-      end={item.to.split('/').length <= 2}
+      end={Boolean(item.end)}
       onClick={onClick}
       className={({ isActive }) =>
         `focus-ring flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition ${

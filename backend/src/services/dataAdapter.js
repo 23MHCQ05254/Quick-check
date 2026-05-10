@@ -111,7 +111,6 @@ export const createCertification = async (payload) => {
   });
   return await cert.populate('organization');
 };
-
 export const upsertTemplate = async (certificationId, profile, mentorId, samples = []) => {
   if (useDemo()) return inMemoryStore.upsertTemplate(certificationId, profile, mentorId, samples);
   const certification = await Certification.findById(certificationId);

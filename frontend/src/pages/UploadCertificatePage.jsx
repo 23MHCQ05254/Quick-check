@@ -62,7 +62,7 @@ export default function UploadCertificatePage() {
         </div>
 
         <input className="field mt-5" placeholder="Search MongoDB, Cisco, AWS..." value={query} onChange={(event) => setQuery(event.target.value)} />
-        <Button as={Link} to="/student/catalog" variant="secondary" className="mt-3 w-full">
+        <Button as={Link} to="/dashboard/catalog" variant="secondary" className="mt-3 w-full">
           Open full catalog
           <ArrowRight size={16} />
         </Button>

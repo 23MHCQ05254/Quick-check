@@ -36,7 +36,7 @@ export default function CertificationCatalogPage() {
             Search, filter, and select the exact certification before upload. QuickCheck uses this selection to load the matching mentor-trained template profile.
           </p>
         </div>
-        <Button as={Link} to="/student/upload" disabled={!selectedCertification}>
+        <Button as={Link} to="/dashboard/upload" disabled={!selectedCertification}>
           <BadgeCheck size={17} />
           Continue to upload
           <ArrowRight size={17} />
@@ -55,7 +55,7 @@ export default function CertificationCatalogPage() {
                 <p className="font-black text-slate-950 dark:text-white">{selectedCertification.name || selectedCertification.certificateName}</p>
               </div>
             </div>
-            <Button as={Link} to="/student/upload" className="self-start sm:self-auto">
+            <Button as={Link} to="/dashboard/upload" className="self-start sm:self-auto">
               Upload certificate
             </Button>
           </div>

@@ -73,7 +73,7 @@ export function CertificationDetailsModal({ certification, onClose, onSelect, se
                   <BadgeCheck size={16} />
                   {selected ? 'Selected' : 'Select certification'}
                 </Button>
-                <Button as={Link} to="/student/upload" onClick={onSelect}>
+                <Button as={Link} to="/dashboard/upload" onClick={onSelect}>
                   <UploadCloud size={16} />
                   Continue to upload
                 </Button>

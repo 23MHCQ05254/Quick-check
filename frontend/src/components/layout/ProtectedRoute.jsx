@@ -18,7 +18,9 @@ export function ProtectedRoute({ roles, nested = false }) {
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to={user.role === 'MENTOR' ? '/mentor' : '/student'} replace />;
+    const fallback = user.role === 'MENTOR' ? '/mentor/dashboard' : '/dashboard';
+    console.log(`[auth.redirect] Blocked role access for role=${user.role}, redirecting to ${fallback}`);
+    return <Navigate to={fallback} replace />;
   }
 
   return nested ? <Outlet /> : <Outlet />;
