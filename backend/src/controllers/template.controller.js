@@ -66,8 +66,16 @@ export const createCertification = asyncHandler(async (req, res) => {
 
 export const trainTemplate = asyncHandler(async (req, res) => {
   const { certificationId } = req.body;
+  
+  console.log('[templates.train] Request received');
+  console.log('[templates.train] Body:', req.body);
+  console.log('[templates.train] Files:', req.files?.length || 0, 'file(s)');
+  
   if (!certificationId) throw new ApiError(400, 'Certification ID is required');
-  if (!req.files?.length) throw new ApiError(400, 'Reference certificate samples are required');
+  if (!req.files?.length) {
+    console.error('[templates.train] No files in req.files');
+    throw new ApiError(400, 'Reference certificate samples are required');
+  }
 
   const profile = await extractTemplateProfileWithAi({ files: req.files, certificationId });
 

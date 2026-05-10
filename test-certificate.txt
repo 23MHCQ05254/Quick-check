@@ -1,0 +1,7 @@
+This is a test certificate for MongoDB training
+Certificate ID: TEST-CERT-001
+Organization: MongoDB
+Student Name: Test Student
+Issue Date: 2024-01-01
+Credential: MongoDB Associate Developer Certification
+Authenticity: Verified by institution
