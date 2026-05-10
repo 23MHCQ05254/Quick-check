@@ -49,10 +49,9 @@ function NavItem({ item, onClick }) {
       end={Boolean(item.end)}
       onClick={onClick}
       className={({ isActive }) =>
-        `focus-ring flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition ${
-          isActive
-            ? 'bg-ink text-white shadow-glow dark:bg-white dark:text-ink'
-            : 'text-slate-600 hover:bg-slate-900/5 dark:text-slate-300 dark:hover:bg-white/10'
+        `focus-ring flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition ${isActive
+          ? 'bg-ink text-white shadow-glow dark:bg-white dark:text-ink'
+          : 'text-slate-600 hover:bg-slate-900/5 dark:text-slate-300 dark:hover:bg-white/10'
         }`
       }
     >

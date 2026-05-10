@@ -14,6 +14,7 @@ const templateProfileSchema = new mongoose.Schema(
         imageHash: String
       }
     ],
+    // legacy extractedProfile kept for backward compatibility
     extractedProfile: {
       resolution: {
         width: Number,
@@ -29,12 +30,34 @@ const templateProfileSchema = new mongoose.Schema(
       textBlocks: [Object],
       metadata: Object
     },
+
+    // New comprehensive template data produced by AI training
+    extractedTemplateData: {
+      ocrBlocks: [Object],
+      textCoordinates: [Object],
+      qrData: [Object],
+      qrCoordinates: [Object],
+      logoHashes: [String],
+      signatureRegions: [Object],
+      colorProfiles: [Object],
+      fontMetadata: [Object],
+      spacingPatterns: [Object],
+      layoutVectors: [Object],
+      imageHashes: [String],
+      securityMarkers: [Object],
+      visualFingerprint: Object,
+      averageTemplateScore: { type: Number, default: null }
+    },
     thresholds: {
-      nameSimilarity: { type: Number, default: 78 },
-      visualSimilarity: { type: Number, default: 70 },
-      fraudReview: { type: Number, default: 65 },
-      fraudReject: { type: Number, default: 92 }
-    }
+      // thresholds are advisory and should be computed by AI; defaults removed to avoid hardcoding
+      nameSimilarity: { type: Number },
+      visualSimilarity: { type: Number },
+      fraudReview: { type: Number },
+      fraudReject: { type: Number }
+    },
+
+    trainedSamplesCount: { type: Number, default: 0 },
+    trainedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   },
   { timestamps: true }
 );

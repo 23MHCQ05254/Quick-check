@@ -94,8 +94,12 @@ export const trainTemplate = asyncHandler(async (req, res) => {
     version: (current?.version || 0) + 1,
     status: 'ACTIVE',
     samples: req.files.map((file) => ({ originalName: file.originalname, fileUrl: `/uploads/${file.filename}` })),
+    // persist both legacy and new comprehensive template data
     extractedProfile: profile.extractedProfile,
-    thresholds: profile.thresholds
+    extractedTemplateData: profile.extractedTemplateData || profile.extractedProfile || {},
+    thresholds: profile.thresholds,
+    trainedSamplesCount: (profile?.trainedSamplesCount) || req.files.length,
+    trainedBy: req.user._id
   });
 
   await TemplateProfile.updateMany({ certification: certification._id, _id: { $ne: template._id } }, { status: 'RETIRED' });

@@ -91,9 +91,9 @@ export default function TemplateManager() {
                 <div className="mt-4 grid gap-3 sm:grid-cols-4">
                   {[
                     ['Version', template.version],
-                    ['Samples', template.extractedProfile?.metadata?.trainedSamples || template.samples?.length || 0],
-                    ['Name threshold', template.thresholds?.nameSimilarity || 78],
-                    ['Visual threshold', template.thresholds?.visualSimilarity || 70]
+                    ['Samples', template.trainedSamplesCount || template.extractedProfile?.metadata?.trainedSamples || template.samples?.length || 0],
+                    ['Avg score', template.extractedTemplateData?.averageTemplateScore ? `${Math.round(template.extractedTemplateData.averageTemplateScore)}%` : 'n/a'],
+                    ['Logos', (template.extractedTemplateData?.logoHashes || []).length || 0]
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-2xl bg-slate-900/5 p-3 dark:bg-white/10">
                       <p className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400">{label}</p>

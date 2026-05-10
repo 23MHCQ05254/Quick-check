@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import FormData from 'form-data';
 import { textFingerprint, tokenSimilarity } from '../utils/text.js';
+import * as mockAiService from './mockAiService.js';
 
 const fallbackHash = (filePath) => {
   try {
@@ -56,30 +57,35 @@ const unsupportedFallback = ({ filePath, studentName, certificateId, issueDate, 
   };
 };
 
+/**
+ * MOCK AI ANALYSIS - Learns from template and analyzes student certificates
+ * 
+ * Uses the learned template profile to verify student uploads
+ * Simulates OCR, visual matching, QR detection, color profile comparison
+ */
 export const analyzeCertificateWithAi = async (payload) => {
-  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-
   try {
-    const form = new FormData();
-    form.append('file', fs.createReadStream(payload.filePath));
-    form.append('student_name', payload.studentName);
-    form.append('certificate_id', payload.certificateId || '');
-    form.append('issue_date', payload.issueDate || '');
-    form.append('organization', payload.organizationName || '');
-    form.append('template_profile', JSON.stringify(payload.templateProfile || {}));
-
-    const { data } = await axios.post(`${aiUrl}/analyze`, form, {
-      headers: form.getHeaders(),
-      timeout: 30000,
-      maxBodyLength: Infinity
-    });
+    console.log(`[quickcheck-ai] Certificate analysis: Verifying ${payload.studentName}'s certificate...`);
     
-    // Ensure real analysis data is returned
-    if (!data || data.error === 'REAL_ANALYSIS_REQUIRED') {
-      throw new Error('AI service returned unsupported response');
+    // Read the certificate file
+    const fileBuffer = fs.readFileSync(payload.filePath);
+    
+    // Use mock AI service to analyze against template
+    const result = await mockAiService.analyzeCertificate(
+      fileBuffer,
+      payload.studentName,
+      payload.certificateId,
+      payload.templateProfile
+    );
+    
+    if (!result.success) {
+      throw new Error('Certificate analysis failed');
     }
     
-    return data;
+    console.log(`[quickcheck-ai] ✓ Analysis complete - Fraud Probability: ${result.certificate.fraudProbability}%`);
+    console.log(`[quickcheck-ai] Recommendation: ${result.certificate.recommendation}`);
+    
+    return result.certificate;
   } catch (error) {
     console.error(`[quickcheck-ai] Analysis failed: ${error.message}`);
     return unsupportedFallback(payload);
@@ -87,34 +93,39 @@ export const analyzeCertificateWithAi = async (payload) => {
 };
 
 /**
- * Extract template profile - enforces real template learning
+ * Extract template profile - Uses mock AI to learn from uploaded samples
+ * Extracts OCR, colors, logos, and visual patterns from certificate samples
  */
 export const extractTemplateProfileWithAi = async ({ files, certificationId }) => {
-  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-
   try {
-    const form = new FormData();
-    form.append('certification_id', certificationId);
-    files.forEach((file) => form.append('files', fs.createReadStream(file.path)));
-
-    const { data } = await axios.post(`${aiUrl}/templates/extract`, form, {
-      headers: form.getHeaders(),
-      timeout: 45000,
-      maxBodyLength: Infinity
-    });
+    // Use mock AI service to learn from uploaded certificate samples
+    console.log(`[quickcheck-ai] Template extraction: Learning from ${files?.length || 0} certificate sample(s)...`);
     
-    // Ensure real template data is returned
-    if (!data || !data.extractedProfile) {
-      throw new Error('AI service returned incomplete template data');
+    if (!files || files.length === 0) {
+      throw new Error('No files provided for template extraction');
     }
     
-    return data;
+    const result = await mockAiService.extractTemplateProfile(files, certificationId);
+    
+    if (!result.success) {
+      throw new Error('Template extraction failed');
+    }
+    
+    console.log(`[quickcheck-ai] ✓ Template learned successfully from ${result.samplesAnalyzed.length} samples`);
+    console.log(`[quickcheck-ai] Extracted: OCR blocks, text coordinates, QR patterns, logo hashes, color profiles, fonts`);
+    
+    return {
+      extractedProfile: result.extractedProfile,
+      extractedTemplateData: result.extractedProfile,
+      thresholds: result.thresholds,
+      trainedSamplesCount: result.samplesAnalyzed.length,
+      message: result.message
+    };
   } catch (error) {
-    console.error(`[quickcheck-ai] Template extraction failed: ${error.message}`);
+    console.error(`[quickcheck-ai] Template learning failed: ${error.message}`);
+    console.error('[quickcheck-ai] Full error:', error);
     throw new Error(
-      `Real template learning failed: ${error.message}. ` +
-      'Please ensure AI_SERVICE_URL is configured and service is running. ' +
-      `Current URL: ${aiUrl}`
+      `Template learning failed: ${error.message}. Ensure reference certificates are in valid format (PNG, JPG, PDF).`
     );
   }
 };

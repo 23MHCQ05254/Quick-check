@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, CheckCircle2, FileUp, Search, ShieldAlert, Sparkles } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/common/Button.jsx';
 import { GlassPanel } from '../components/common/GlassPanel.jsx';
@@ -9,6 +9,7 @@ import { StatusBadge } from '../components/common/StatusBadge.jsx';
 import { useCertificationSelection } from '../context/CertificationSelectionContext.jsx';
 import { useAsync } from '../hooks/useAsync.js';
 import { api, uploadCertificate } from '../lib/api.js';
+import OverlayBoxes from '../components/common/OverlayBoxes.jsx';
 
 export default function UploadCertificatePage() {
   const [query, setQuery] = useState('');
@@ -18,6 +19,8 @@ export default function UploadCertificatePage() {
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const imgRef = useRef();
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const { selectedCertification, selectCertification } = useCertificationSelection();
 
   const { data: catalog, loading } = useAsync(async () => (await api.get('/catalog/certifications', { params: { limit: 48 } })).data.items, []);
@@ -77,11 +80,10 @@ export default function UploadCertificatePage() {
                   key={item._id || item.id}
                   type="button"
                   onClick={() => selectCertification(item)}
-                  className={`focus-ring w-full rounded-2xl border p-4 text-left transition ${
-                    active
-                      ? 'border-cyber-cyan/60 bg-cyan-500/10 shadow-glow'
-                      : 'border-slate-900/10 bg-white/55 hover:-translate-y-0.5 dark:border-white/10 dark:bg-white/[0.04]'
-                  }`}
+                  className={`focus-ring w-full rounded-2xl border p-4 text-left transition ${active
+                    ? 'border-cyber-cyan/60 bg-cyan-500/10 shadow-glow'
+                    : 'border-slate-900/10 bg-white/55 hover:-translate-y-0.5 dark:border-white/10 dark:bg-white/[0.04]'
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -168,13 +170,45 @@ export default function UploadCertificatePage() {
                     <p className="mt-2 text-3xl font-black text-slate-950 dark:text-white">{result.analysis?.visualSimilarity || 0}%</p>
                   </div>
                 </div>
-                <div className="mt-5 space-y-2">
-                  {(result.analysis?.suspiciousIndicators || []).map((indicator) => (
-                    <div key={indicator} className="flex items-center gap-2 rounded-2xl bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
-                      <ShieldAlert size={16} />
-                      {indicator}
+                <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">AI summary</p>
+                    <div className="mt-3 space-y-2">
+                      {(result.aiAnalysis?.aiReasoning || result.analysis?.suspiciousIndicators || []).map((indicator, idx) => (
+                        <div key={idx} className="flex items-center gap-2 rounded-2xl bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                          <ShieldAlert size={16} />
+                          {indicator}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Visual verification</p>
+                    <div className="mt-3 relative max-h-[560px] overflow-auto rounded-2xl border bg-white/60 p-2">
+                      {result.fileUrl ? (
+                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                          <img ref={imgRef}
+                            src={(api.defaults.baseURL || '').replace(/\/api\/*$/, '') + result.fileUrl}
+                            alt="uploaded"
+                            style={{ display: 'block', maxWidth: '720px', height: 'auto' }}
+                            id="uploaded-preview"
+                            onLoad={(e) => {
+                              setImageSize({ width: e.target.naturalWidth, height: e.target.naturalHeight });
+                            }}
+                          />
+                          <OverlayBoxes
+                            boxes={result.extractedCertificateData?.textCoordinates || result.aiAnalysis?.mismatchedRegions || []}
+                            imageWidth={imageSize.width || 720}
+                            imageHeight={imageSize.height || 480}
+                            color={'rgba(255,0,0,0.25)'}
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-500">No preview available</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </GlassPanel>
             </motion.div>

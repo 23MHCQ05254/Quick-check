@@ -67,9 +67,9 @@ export const signup = asyncHandler(async (req, res) => {
       role: 'STUDENT'
     });
 
-    console.log('[auth.signup] ✓ User created successfully:', { 
-      id: user._id, 
-      email: user.email, 
+    console.log('[auth.signup] ✓ User created successfully:', {
+      id: user._id,
+      email: user.email,
       role: user.role,
       passwordHash: user.password.substring(0, 30) + '...',
       timestamp: user.createdAt
@@ -118,7 +118,7 @@ export const login = asyncHandler(async (req, res) => {
   try {
     console.log(`[auth.login] Looking up user in MongoDB with email: ${email}`);
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
-    
+
     if (!user) {
       console.warn(`[auth.login] ✗ User NOT FOUND in MongoDB for email: ${email}`);
       console.log('[auth.login] Checking all users in database for debugging...');
@@ -150,7 +150,7 @@ export const login = asyncHandler(async (req, res) => {
 
     const token = signToken(user);
     console.log(`[auth.login] ✓ JWT generated for user ${email}, role=${user.role}`);
-    
+
     res.json({ token, user: sanitizeUser(user) });
   } catch (error) {
     if (error instanceof ApiError) {

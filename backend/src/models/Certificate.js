@@ -15,6 +15,21 @@ const certificateSchema = new mongoose.Schema(
     ocrText: String,
     textFingerprint: String,
     imageHash: { type: String, index: true },
+    // New detailed extracted certificate data captured from AI pipeline
+    extractedCertificateData: {
+      ocrBlocks: [Object],
+      textCoordinates: [Object],
+      qrData: [Object],
+      logoRegions: [Object],
+      signatureRegions: [Object],
+      colorProfiles: [Object],
+      fontMetadata: [Object],
+      spacingPatterns: [Object],
+      layoutVectors: [Object],
+      imageHashes: [String],
+      securityMarkers: [Object],
+      visualFingerprint: Object
+    },
     status: {
       type: String,
       enum: ['PENDING', 'VERIFIED', 'REJECTED', 'REVIEW_REQUIRED'],
@@ -34,6 +49,7 @@ const certificateSchema = new mongoose.Schema(
       deletedAt: Date,
       deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
     },
+    // AI analysis summary (kept for backward compatibility)
     analysis: {
       fraudProbability: Number,
       confidence: Number,
@@ -45,6 +61,20 @@ const certificateSchema = new mongoose.Schema(
       suspiciousIndicators: [String],
       anomalies: [Object],
       recommendation: String
+    },
+
+    // New comprehensive AI analysis structure
+    aiAnalysis: {
+      authenticityScore: Number,
+      fraudProbability: Number,
+      confidenceLevel: Number,
+      matchedRegions: [Object],
+      mismatchedRegions: [Object],
+      missingElements: [String],
+      duplicateProbability: Number,
+      suspiciousAreas: [Object],
+      aiReasoning: [String],
+      verificationStatus: { type: String, enum: ['VERIFIED', 'SUSPICIOUS', 'POSSIBLE_FORGERY', 'PENDING'], default: 'PENDING' }
     }
   },
   { timestamps: true }

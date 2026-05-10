@@ -116,7 +116,36 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
     imageHash: analysis.imageHash,
     duplicateOf: duplicate?._id,
     status: statusFromAnalysis(analysis, duplicate),
-    analysis
+    // legacy analysis field
+    analysis,
+    // structured extracted certificate data if provided by AI service
+    extractedCertificateData: analysis.extractedCertificateData || {
+      ocrBlocks: analysis.ocrBlocks || null,
+      textCoordinates: analysis.textCoordinates || null,
+      qrData: analysis.qrData ? [analysis.qrData] : (analysis.qrRegions || null),
+      logoRegions: analysis.logoRegions || null,
+      signatureRegions: analysis.signatureRegions || null,
+      colorProfiles: analysis.colorProfiles || null,
+      fontMetadata: analysis.fontMetadata || null,
+      spacingPatterns: analysis.spacingPatterns || null,
+      layoutVectors: analysis.layoutVectors || null,
+      imageHashes: analysis.imageHashes ? analysis.imageHashes : (analysis.imageHash ? [analysis.imageHash] : []),
+      securityMarkers: analysis.securityMarkers || null,
+      visualFingerprint: analysis.visualFingerprint || null
+    },
+    // comprehensive AI analysis mapping
+    aiAnalysis: {
+      authenticityScore: analysis.authenticityScore || null,
+      fraudProbability: analysis.fraudProbability || analysis.fraudProbability || null,
+      confidenceLevel: analysis.confidence || analysis.confidenceLevel || null,
+      matchedRegions: analysis.matchedRegions || null,
+      mismatchedRegions: analysis.mismatchedRegions || analysis.mismatches || null,
+      missingElements: analysis.missingElements || null,
+      duplicateProbability: analysis.duplicateProbability || (duplicate ? 1 : 0),
+      suspiciousAreas: analysis.suspiciousAreas || analysis.suspiciousIndicators || null,
+      aiReasoning: analysis.aiReasoning || analysis.explanations || null,
+      verificationStatus: analysis.verificationStatus || (analysis.fraudProbability >= 80 ? 'POSSIBLE_FORGERY' : (analysis.fraudProbability >= 65 ? 'SUSPICIOUS' : 'VERIFIED'))
+    }
   });
 
   const populated = await certificate.populate(['student', 'certification', 'organization']);

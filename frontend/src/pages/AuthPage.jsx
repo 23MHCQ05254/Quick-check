@@ -45,9 +45,9 @@ export default function AuthPage() {
             rollNumber: form.rollNumber,
             graduationYear: Number(form.graduationYear)
           });
-          const redirectTarget = nextUser.role === 'MENTOR' ? '/mentor/dashboard' : '/dashboard';
-          console.log(`[auth.redirect] Login success for role=${nextUser.role}, navigating to ${redirectTarget}`);
-          navigate(redirectTarget, { replace: true });
+      const redirectTarget = nextUser.role === 'MENTOR' ? '/mentor/dashboard' : '/dashboard';
+      console.log(`[auth.redirect] Login success for role=${nextUser.role}, navigating to ${redirectTarget}`);
+      navigate(redirectTarget, { replace: true });
     } catch (err) {
       setError(err.userMessage || err.response?.data?.message || err.message || 'Authentication failed');
     } finally {
