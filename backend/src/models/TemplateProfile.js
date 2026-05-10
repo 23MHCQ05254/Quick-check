@@ -2,6 +2,10 @@ import mongoose from 'mongoose';
 
 const templateProfileSchema = new mongoose.Schema(
   {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    mentorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     certification: { type: mongoose.Schema.Types.ObjectId, ref: 'Certification', required: true, index: true },
     organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     status: { type: String, enum: ['DRAFT', 'ACTIVE', 'RETIRED'], default: 'ACTIVE', index: true },
@@ -21,13 +25,7 @@ const templateProfileSchema = new mongoose.Schema(
     extractedProfile: { type: mongoose.Schema.Types.Mixed },
     extractedTemplateData: { type: mongoose.Schema.Types.Mixed },
     learnedProfile: { type: mongoose.Schema.Types.Mixed },
-    thresholds: {
-      // thresholds are advisory and should be computed by AI; defaults removed to avoid hardcoding
-      nameSimilarity: { type: Number },
-      visualSimilarity: { type: Number },
-      fraudReview: { type: Number },
-      fraudReject: { type: Number }
-    },
+    thresholds: { type: mongoose.Schema.Types.Mixed, default: {} },
 
     trainedSamplesCount: { type: Number, default: 0 },
     trainedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }

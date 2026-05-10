@@ -1,9 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { isDemoMode } from '../config/db.js';
 import User from '../models/User.js';
-import { demoStore } from '../services/dataAdapter.js';
 
 const normalizeRole = (role) => String(role || '').toUpperCase();
 
@@ -22,20 +20,24 @@ export const protect = asyncHandler(async (req, _res, next) => {
     throw new ApiError(401, 'Invalid or expired authentication token');
   }
 
-  const user = isDemoMode()
-    ? await demoStore.findUserById(payload.id)
-    : await User.findById(payload.id).select('-password');
+  const user = await User.findById(payload.id).select('-password');
 
   if (!user) {
     throw new ApiError(401, 'Authenticated user no longer exists');
   }
 
+  const plainUser = typeof user.toJSON === 'function' ? user.toJSON() : { ...user };
+  const userId = plainUser._id?.toString?.() || plainUser.id || payload.id;
+
   req.user = {
-    ...(typeof user.toJSON === 'function' ? user.toJSON() : user),
-    role: normalizeRole(user.role)
+    ...plainUser,
+    id: userId,
+    _id: userId,
+    email: plainUser.email,
+    role: normalizeRole(plainUser.role)
   };
 
-  console.log(`[auth.protect] Authenticated user id=${req.user._id || req.user.id} role=${req.user.role}`);
+  console.log(`[auth.protect] Authenticated user id=${req.user.id} role=${req.user.role}`);
   next();
 });
 

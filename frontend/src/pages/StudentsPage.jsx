@@ -1,5 +1,6 @@
 import { ExternalLink, Filter, GraduationCap, Search, ShieldCheck } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { Link } from 'react-router-dom';
 import { GlassPanel } from '../components/common/GlassPanel.jsx';
 import { Skeleton } from '../components/common/Skeleton.jsx';
@@ -9,7 +10,9 @@ import { api } from '../lib/api.js';
 
 export default function StudentsPage() {
   const [filters, setFilters] = useState({ search: '', department: '', year: '', risk: '', readiness: '', sort: 'readiness' });
-  const { data, loading } = useAsync(async () => (await api.get('/mentor/students', { params: filters })).data, [filters]);
+  const debouncedSearch = useDebouncedValue(filters.search);
+  const params = useMemo(() => ({ ...filters, search: debouncedSearch }), [filters, debouncedSearch]);
+  const { data, loading } = useAsync(async () => (await api.get('/mentor/students', { params })).data, [params]);
   const students = data?.items || [];
 
   const update = (key, value) => setFilters((current) => ({ ...current, [key]: value }));

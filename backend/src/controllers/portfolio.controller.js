@@ -13,7 +13,9 @@ export const publicPortfolio = asyncHandler(async (req, res) => {
     return;
   }
 
-  const student = await User.findOne({ publicSlug: req.params.slug, role: 'STUDENT' });
+  const student = await User.findOne({ publicSlug: req.params.slug, role: 'STUDENT' }).select(
+    'name publicSlug department graduationYear skills skillScore placementReadiness createdAt'
+  );
   if (!student) throw new ApiError(404, 'Portfolio not found');
 
   const certificates = await Certificate.find({ student: student._id, status: 'VERIFIED' })

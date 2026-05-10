@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Award, BadgeCheck, Bell, BriefcaseBusiness, ShieldAlert, UploadCloud } from 'lucide-react';
+import { useMemo } from 'react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { Button } from '../components/common/Button.jsx';
 import { GlassPanel } from '../components/common/GlassPanel.jsx';
@@ -11,18 +12,23 @@ import { useAsync } from '../hooks/useAsync.js';
 import { api } from '../lib/api.js';
 import { Link } from 'react-router-dom';
 
-const readinessData = [
-  { month: 'Jan', score: 46 },
-  { month: 'Feb', score: 52 },
-  { month: 'Mar', score: 58 },
-  { month: 'Apr', score: 64 },
-  { month: 'May', score: 71 }
-];
-
 export default function StudentDashboard() {
   const { user } = useAuth();
   const { data, loading } = useAsync(async () => (await api.get('/certificates/mine')).data.items, []);
   const certificates = data || [];
+  const readinessData = useMemo(() => {
+    const buckets = ['Jan', 'Feb', 'Mar', 'Apr', 'May'];
+    return buckets.map((month, index) => {
+      const monthCertificates = certificates.filter((certificate) => {
+        const date = certificate.createdAt || certificate.issueDate;
+        return date ? new Date(date).toLocaleString('en-US', { month: 'short' }) === month : false;
+      });
+      const verifiedCount = monthCertificates.filter((certificate) => certificate.status === 'VERIFIED').length;
+      const baseScore = Number(user.placementReadiness || 38);
+      const score = monthCertificates.length ? Math.round((verifiedCount / monthCertificates.length) * 100) : Math.max(0, Math.min(100, baseScore + index * 2));
+      return { month, score };
+    });
+  }, [certificates, user.placementReadiness]);
   const verified = certificates.filter((item) => item.status === 'VERIFIED').length;
   const review = certificates.filter((item) => item.status === 'REVIEW_REQUIRED').length;
   const avgFraud = certificates.length

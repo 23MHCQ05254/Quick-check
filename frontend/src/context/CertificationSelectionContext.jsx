@@ -1,21 +1,29 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { useAuth } from './AuthContext.jsx';
 
 const CertificationSelectionContext = createContext(null);
 const STORAGE_KEY = 'quickcheck.selectedCertification';
 
 export function CertificationSelectionProvider({ children }) {
+  const { user } = useAuth();
+  const storageKey = user?.id || user?._id ? `${STORAGE_KEY}.${user.id || user._id}` : STORAGE_KEY;
   const [selectedCertification, setSelectedCertification] = useState(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(storageKey);
     return stored ? JSON.parse(stored) : null;
   });
 
   useEffect(() => {
     if (selectedCertification) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedCertification));
+      localStorage.setItem(storageKey, JSON.stringify(selectedCertification));
       return;
     }
-    localStorage.removeItem(STORAGE_KEY);
-  }, [selectedCertification]);
+    localStorage.removeItem(storageKey);
+  }, [selectedCertification, storageKey]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(storageKey);
+    setSelectedCertification(stored ? JSON.parse(stored) : null);
+  }, [storageKey]);
 
   const selectCertification = (certification) => setSelectedCertification(certification);
   const clearCertification = () => setSelectedCertification(null);

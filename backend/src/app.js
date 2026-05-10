@@ -60,10 +60,11 @@ app.use(
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+// Rate limiting: higher limits during development to avoid blocking local testing
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 500,
+    limit: process.env.NODE_ENV === 'production' ? 500 : 5000,
     standardHeaders: true,
     legacyHeaders: false
   })
@@ -75,7 +76,7 @@ app.get(`${apiPrefix}/health`, (_req, res) => {
   res.json({
     status: 'ok',
     service: 'quickcheck-backend',
-    mode: isDemoMode() ? 'demo' : 'mongodb',
+    mode: 'mongodb',
     timestamp: new Date().toISOString()
   });
 });

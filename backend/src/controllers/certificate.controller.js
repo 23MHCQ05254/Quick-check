@@ -18,6 +18,7 @@ const statusFromAnalysis = (analysis, duplicate) => {
 
 export const uploadCertificate = asyncHandler(async (req, res) => {
   const { certificationId, certificateId, issueDate } = req.body;
+  const userId = req.user.id || req.user._id;
 
   if (!certificationId) {
     throw new ApiError(400, 'A certification type must be selected before upload');
@@ -51,7 +52,12 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
     });
 
     const record = await demoStore.addCertificate({
-      student: req.user._id,
+      userId,
+      studentId: userId,
+      mentorId: undefined,
+      uploadedBy: userId,
+      createdBy: userId,
+      student: userId,
       certification: certification._id,
       organization: certification.organization._id,
       title: certification.name,
@@ -113,7 +119,12 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
   });
 
   const certificate = await Certificate.create({
-    student: req.user._id,
+    userId,
+    studentId: userId,
+    mentorId: undefined,
+    uploadedBy: userId,
+    createdBy: userId,
+    student: userId,
     certification: certification._id,
     organization: certification.organization._id,
     title: certification.name,
@@ -165,13 +176,16 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
 });
 
 export const listMyCertificates = asyncHandler(async (req, res) => {
+  const userId = req.user.id || req.user._id;
   if (isDemoMode()) {
-    const items = await demoStore.listCertificatesForStudent(req.user._id);
+    const items = await demoStore.listCertificatesForStudent(userId);
     res.json({ items });
     return;
   }
 
-  const items = await Certificate.find({ student: req.user._id })
+  const items = await Certificate.find({
+    $or: [{ student: userId }, { studentId: userId }, { userId }, { uploadedBy: userId }]
+  })
     .populate(['certification', 'organization'])
     .sort({ createdAt: -1 });
   res.json({ items });

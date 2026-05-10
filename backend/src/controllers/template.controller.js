@@ -97,10 +97,15 @@ export const trainTemplate = asyncHandler(async (req, res) => {
   if (!certification) throw new ApiError(404, 'Certification not found');
 
   const current = await TemplateProfile.findOne({ certification: certification._id }).sort({ version: -1 });
+  const userId = req.user.id || req.user._id;
   const template = await TemplateProfile.create({
+    userId,
+    studentId: userId,
+    mentorId: userId,
+    uploadedBy: userId,
     certification: certification._id,
     organization: certification.organization._id,
-    createdBy: req.user._id,
+    createdBy: userId,
     version: (current?.version || 0) + 1,
     status: 'ACTIVE',
     samples: req.files.map((file) => ({ originalName: file.originalname, fileUrl: `/uploads/${file.filename}` })),
@@ -110,7 +115,7 @@ export const trainTemplate = asyncHandler(async (req, res) => {
     learnedProfile: profile.extractedProfile,
     thresholds: profile.thresholds,
     trainedSamplesCount: (profile?.trainedSamplesCount) || req.files.length,
-    trainedBy: req.user._id
+    trainedBy: userId
   });
 
   await TemplateProfile.updateMany({ certification: certification._id, _id: { $ne: template._id } }, { status: 'RETIRED' });

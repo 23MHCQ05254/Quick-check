@@ -6,9 +6,7 @@ export const connectDatabase = async () => {
   const uri = process.env.MONGODB_URI;
 
   if (!uri) {
-    demoMode = true;
-    console.warn('[quickcheck] MONGODB_URI missing. API is running with in-memory demo data.');
-    return null;
+    throw new Error('MONGODB_URI is required. Demo mode has been disabled for production-style isolated data storage.');
   }
 
   try {
@@ -17,10 +15,8 @@ export const connectDatabase = async () => {
     console.log(`[quickcheck] MongoDB connected: ${connection.connection.host}`);
     return connection;
   } catch (error) {
-    demoMode = true;
-    console.warn('[quickcheck] MongoDB connection failed. Falling back to in-memory demo data.');
-    console.warn(error.message);
-    return null;
+    demoMode = false;
+    throw new Error(`MongoDB connection failed: ${error.message}`);
   }
 };
 

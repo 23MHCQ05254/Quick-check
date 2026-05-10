@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Archive, FileCheck2, Lock, RefreshCcw, Search, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
+import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { Button } from '../components/common/Button.jsx';
 import { GlassPanel } from '../components/common/GlassPanel.jsx';
 import { Skeleton } from '../components/common/Skeleton.jsx';
@@ -12,7 +13,14 @@ import { api } from '../lib/api.js';
 export default function CertificateModerationPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
-  const { data, loading, reload } = useAsync(async () => (await api.get('/mentor/certificates', { params: { limit: 48, status: status || undefined, search: search || undefined } })).data.items, [status, search]);
+  const debouncedSearch = useDebouncedValue(search);
+
+  const { data, loading, reload } = useAsync(
+    async () => (
+      await api.get('/mentor/certificates', { params: { limit: 48, status: status || undefined, search: debouncedSearch || undefined } })
+    ).data.items,
+    [status, debouncedSearch]
+  );
 
   const moderate = async (certificate, patch) => {
     await api.patch(`/mentor/certificates/${certificate._id || certificate.id}/moderate`, patch);

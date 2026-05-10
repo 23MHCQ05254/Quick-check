@@ -121,9 +121,6 @@ export const login = asyncHandler(async (req, res) => {
 
     if (!user) {
       console.warn(`[auth.login] ✗ User NOT FOUND in MongoDB for email: ${email}`);
-      console.log('[auth.login] Checking all users in database for debugging...');
-      const allUsers = await User.find({}).select('email');
-      console.log('[auth.login] Users in database:', allUsers.map(u => u.email));
       throw new ApiError(401, 'Invalid email or password');
     }
 

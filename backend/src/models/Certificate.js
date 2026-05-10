@@ -2,6 +2,11 @@ import mongoose from 'mongoose';
 
 const certificateSchema = new mongoose.Schema(
   {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    mentorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     student: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     certification: { type: mongoose.Schema.Types.ObjectId, ref: 'Certification', required: true, index: true },
     organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
@@ -11,25 +16,12 @@ const certificateSchema = new mongoose.Schema(
     fileUrl: String,
     filePath: String,
     originalName: String,
-    qrData: String,
+    qrData: { type: mongoose.Schema.Types.Mixed },
     ocrText: String,
     textFingerprint: String,
     imageHash: { type: String, index: true },
     // New detailed extracted certificate data captured from AI pipeline
-    extractedCertificateData: {
-      ocrBlocks: [Object],
-      textCoordinates: [Object],
-      qrData: [Object],
-      logoRegions: [Object],
-      signatureRegions: [Object],
-      colorProfiles: [Object],
-      fontMetadata: [Object],
-      spacingPatterns: [Object],
-      layoutVectors: [Object],
-      imageHashes: [String],
-      securityMarkers: [Object],
-      visualFingerprint: Object
-    },
+    extractedCertificateData: { type: mongoose.Schema.Types.Mixed, default: {} },
     status: {
       type: String,
       enum: ['PENDING', 'VERIFIED', 'REJECTED', 'REVIEW_REQUIRED'],
@@ -50,32 +42,10 @@ const certificateSchema = new mongoose.Schema(
       deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
     },
     // AI analysis summary (kept for backward compatibility)
-    analysis: {
-      fraudProbability: Number,
-      confidence: Number,
-      nameSimilarity: Number,
-      visualSimilarity: Number,
-      trustScore: Number,
-      riskLevel: String,
-      extractedFields: Object,
-      suspiciousIndicators: [String],
-      anomalies: [Object],
-      recommendation: String
-    },
+    analysis: { type: mongoose.Schema.Types.Mixed, default: {} },
 
     // New comprehensive AI analysis structure
-    aiAnalysis: {
-      authenticityScore: Number,
-      fraudProbability: Number,
-      confidenceLevel: Number,
-      matchedRegions: [Object],
-      mismatchedRegions: [Object],
-      missingElements: [String],
-      duplicateProbability: Number,
-      suspiciousAreas: [Object],
-      aiReasoning: [String],
-      verificationStatus: { type: String, enum: ['VERIFIED', 'SUSPICIOUS', 'POSSIBLE_FORGERY', 'PENDING'], default: 'PENDING' }
-    }
+    aiAnalysis: { type: mongoose.Schema.Types.Mixed, default: {} }
   },
   { timestamps: true }
 );

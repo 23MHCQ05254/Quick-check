@@ -178,6 +178,7 @@ export const createOrganization = asyncHandler(async (req, res) => {
   if (existing) throw new ApiError(409, 'Organization already exists');
 
   const organization = await Organization.create({
+    createdBy: req.user.id || req.user._id,
     name: req.body.name,
     slug,
     description: req.body.description,
@@ -201,6 +202,7 @@ export const updateOrganization = asyncHandler(async (req, res) => {
 
   const patch = { ...req.body };
   if (patch.name) patch.slug = slugify(patch.name, { lower: true, strict: true });
+  patch.updatedBy = req.user.id || req.user._id;
   const organization = await Organization.findByIdAndUpdate(req.params.id, patch, { new: true, runValidators: true });
   if (!organization) throw new ApiError(404, 'Organization not found');
   res.json({ organization });
@@ -233,6 +235,7 @@ export const createCertification = asyncHandler(async (req, res) => {
 
   const name = req.body.certificateName || req.body.name;
   const certification = await Certification.create({
+    createdBy: req.user.id || req.user._id,
     organization: organization._id,
     name,
     slug: slugify(name, { lower: true, strict: true }),
@@ -270,6 +273,7 @@ export const updateCertification = asyncHandler(async (req, res) => {
     patch.organization = patch.organizationId;
     delete patch.organizationId;
   }
+  patch.updatedBy = req.user.id || req.user._id;
 
   const certification = await Certification.findByIdAndUpdate(req.params.id, patch, { new: true, runValidators: true }).populate('organization');
   if (!certification) throw new ApiError(404, 'Certification not found');

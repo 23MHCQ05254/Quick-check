@@ -2,6 +2,10 @@ import mongoose from 'mongoose';
 
 const activityLogSchema = new mongoose.Schema(
   {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    mentorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     actorRole: { type: String, enum: ['STUDENT', 'MENTOR'], required: true, index: true },
     action: { type: String, required: true, index: true },
@@ -9,7 +13,7 @@ const activityLogSchema = new mongoose.Schema(
     entityId: { type: mongoose.Schema.Types.ObjectId },
     severity: { type: String, enum: ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'], default: 'INFO', index: true },
     message: { type: String, required: true },
-    metadata: Object,
+    metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     ipAddress: String,
     userAgent: String
   },

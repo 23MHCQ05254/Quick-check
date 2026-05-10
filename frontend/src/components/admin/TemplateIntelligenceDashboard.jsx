@@ -55,6 +55,19 @@ export default function TemplateIntelligenceDashboard() {
         }
     };
 
+    const brightnessValue = (value) => {
+        if (typeof value === 'number') return value;
+        if (value && typeof value === 'object') return value.avg ?? value.mean ?? value.value ?? null;
+        return null;
+    };
+
+    const edgeDensityValue = (profile) => {
+        const value = profile?.edgeDensity;
+        if (typeof value === 'number') return value;
+        if (value && typeof value === 'object') return value.avg ?? value.mean ?? value.value ?? null;
+        return profile?.layouts?.length ? profile.layouts.length : null;
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -169,15 +182,21 @@ export default function TemplateIntelligenceDashboard() {
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-400 uppercase tracking-wide">Brightness</p>
-                                        <p className="text-white">{selectedTemplate.extractedProfile?.brightness?.toFixed(1)}</p>
+                                        <p className="text-white">
+                                            {brightnessValue(selectedTemplate.extractedProfile?.brightness) ?? 'n/a'}
+                                        </p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-400 uppercase tracking-wide">Edge Density</p>
-                                        <p className="text-white">{selectedTemplate.extractedProfile?.edgeDensity?.toFixed(3)}</p>
+                                        <p className="text-white">
+                                            {edgeDensityValue(selectedTemplate.extractedProfile)?.toFixed?.(3) ?? edgeDensityValue(selectedTemplate.extractedProfile) ?? 'n/a'}
+                                        </p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-400 uppercase tracking-wide">Text Density</p>
-                                        <p className="text-white">{selectedTemplate.extractedProfile?.textDensity?.toFixed(3)}</p>
+                                        <p className="text-white">
+                                            {selectedTemplate.extractedProfile?.textDensity?.toFixed?.(3) ?? selectedTemplate.extractedProfile?.textDensity ?? 'n/a'}
+                                        </p>
                                     </div>
                                 </div>
 
@@ -199,18 +218,18 @@ export default function TemplateIntelligenceDashboard() {
                         )}
 
                         {/* Components */}
-                        {selectedTemplate.extractedProfile?.components && (
+                        {selectedTemplate.extractedProfile?.layouts && (
                             <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-6">
                                 <h4 className="font-semibold text-white mb-4">
-                                    Detected Components ({selectedTemplate.extractedProfile.components.length})
+                                    Detected Layout Regions ({selectedTemplate.extractedProfile.layouts.length})
                                 </h4>
                                 <div className="space-y-2">
-                                    {selectedTemplate.extractedProfile.components.map((comp, idx) => (
+                                    {selectedTemplate.extractedProfile.layouts.map((comp, idx) => (
                                         <div key={idx} className="p-3 bg-slate-700/30 rounded border border-slate-600">
-                                            <p className="text-sm font-semibold text-white">{comp.type}</p>
+                                            <p className="text-sm font-semibold text-white">{comp.type || 'region'}</p>
                                             <p className="text-xs text-slate-400">
-                                                Stability: <span className="text-cyan-300">{comp.stability}</span> • Frequency:{' '}
-                                                <span className="text-cyan-300">{comp.frequency}</span>
+                                                Density: <span className="text-cyan-300">{comp.density ?? 'n/a'}</span> • Size:{' '}
+                                                <span className="text-cyan-300">{comp.width || 0}×{comp.height || 0}</span>
                                             </p>
                                         </div>
                                     ))}

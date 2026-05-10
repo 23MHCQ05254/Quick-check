@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 
 const certificationSchema = new mongoose.Schema(
   {
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     name: { type: String, required: true, trim: true },
     slug: { type: String, required: true, lowercase: true, index: true },
