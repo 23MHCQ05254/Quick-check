@@ -66,11 +66,11 @@ export const createCertification = asyncHandler(async (req, res) => {
 
 export const trainTemplate = asyncHandler(async (req, res) => {
   const { certificationId } = req.body;
-  
+
   console.log('[templates.train] Request received');
   console.log('[templates.train] Body:', req.body);
   console.log('[templates.train] Files:', req.files?.length || 0, 'file(s)');
-  
+
   if (!certificationId) throw new ApiError(400, 'Certification ID is required');
   if (!req.files?.length) {
     console.error('[templates.train] No files in req.files');
@@ -78,6 +78,8 @@ export const trainTemplate = asyncHandler(async (req, res) => {
   }
 
   const profile = await extractTemplateProfileWithAi({ files: req.files, certificationId });
+  console.log('[templates.train] Extracted template profile:', JSON.stringify(profile.extractedProfile, null, 2));
+  console.log('[templates.train] Learned thresholds:', JSON.stringify(profile.thresholds, null, 2));
 
   if (isDemoMode()) {
     const template = await demoStore.upsertTemplate(
@@ -102,9 +104,10 @@ export const trainTemplate = asyncHandler(async (req, res) => {
     version: (current?.version || 0) + 1,
     status: 'ACTIVE',
     samples: req.files.map((file) => ({ originalName: file.originalname, fileUrl: `/uploads/${file.filename}` })),
-    // persist both legacy and new comprehensive template data
+    // persist the real learned structure for downstream verification
     extractedProfile: profile.extractedProfile,
     extractedTemplateData: profile.extractedTemplateData || profile.extractedProfile || {},
+    learnedProfile: profile.extractedProfile,
     thresholds: profile.thresholds,
     trainedSamplesCount: (profile?.trainedSamplesCount) || req.files.length,
     trainedBy: req.user._id

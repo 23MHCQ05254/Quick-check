@@ -11,6 +11,7 @@ import { textFingerprint } from '../utils/text.js';
 
 const statusFromAnalysis = (analysis, duplicate) => {
   if (duplicate) return 'REJECTED';
+  if (analysis?.verificationStatus === 'VERIFIED' || (analysis.fraudProbability || 0) <= 5) return 'VERIFIED';
   if ((analysis.fraudProbability || 0) >= 65) return 'REVIEW_REQUIRED';
   return 'PENDING';
 };
@@ -83,6 +84,11 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
 
   const template = await TemplateProfile.findOne({ certification: certification._id, status: 'ACTIVE' });
   if (!template) throw new ApiError(400, 'Selected certification does not have an active template profile');
+  console.log('[certificates.upload] Loaded template profile for certification:', certification._id.toString());
+  console.log('[certificates.upload] Template keys:', Object.keys(template.toJSON()));
+
+  const learnedTemplateProfile = template.learnedProfile || template.extractedProfile || template.extractedTemplateData || {};
+  console.log('[certificates.upload] Learned template profile snapshot:', JSON.stringify(learnedTemplateProfile, null, 2));
 
   const analysis = await analyzeCertificateWithAi({
     filePath: req.file.path,
@@ -90,7 +96,13 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
     certificateId,
     issueDate,
     organizationName: certification.organization.name,
-    templateProfile: template.toJSON()
+    templateProfile: {
+      certificationId: certification._id.toString(),
+      thresholds: template.thresholds,
+      metadata: template.metadata,
+      extractedProfile: learnedTemplateProfile,
+      ...learnedTemplateProfile
+    }
   });
 
   const duplicate = await detectDuplicateCertificate({

@@ -23,6 +23,12 @@ export default function UploadCertificatePage() {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const { selectedCertification, selectCertification } = useCertificationSelection();
 
+  const formatPercent = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '0';
+    return Math.round(numeric).toString();
+  };
+
   const { data: catalog, loading } = useAsync(async () => (await api.get('/catalog/certifications', { params: { limit: 48 } })).data.items, []);
 
   const filtered = useMemo(() => {
@@ -157,17 +163,17 @@ export default function UploadCertificatePage() {
                   <StatusBadge status={result.status} />
                 </div>
                 <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                  <div className="rounded-2xl bg-white/55 p-4 dark:bg-white/[0.04]">
+                  <div className="min-w-0 rounded-2xl bg-white/55 p-4 dark:bg-white/[0.04]">
                     <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Fraud probability</p>
-                    <p className="mt-2 text-3xl font-black text-slate-950 dark:text-white">{result.analysis?.fraudProbability || 0}%</p>
+                    <p className="mt-2 text-2xl font-black leading-none tabular-nums tracking-tight text-slate-950 dark:text-white sm:text-3xl">{formatPercent(result.analysis?.fraudProbability)}%</p>
                   </div>
-                  <div className="rounded-2xl bg-white/55 p-4 dark:bg-white/[0.04]">
+                  <div className="min-w-0 rounded-2xl bg-white/55 p-4 dark:bg-white/[0.04]">
                     <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Name match</p>
-                    <p className="mt-2 text-3xl font-black text-slate-950 dark:text-white">{result.analysis?.nameSimilarity || 0}%</p>
+                    <p className="mt-2 text-2xl font-black leading-none tabular-nums tracking-tight text-slate-950 dark:text-white sm:text-3xl">{formatPercent(result.analysis?.nameSimilarity)}%</p>
                   </div>
-                  <div className="rounded-2xl bg-white/55 p-4 dark:bg-white/[0.04]">
+                  <div className="min-w-0 rounded-2xl bg-white/55 p-4 dark:bg-white/[0.04]">
                     <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Visual match</p>
-                    <p className="mt-2 text-3xl font-black text-slate-950 dark:text-white">{result.analysis?.visualSimilarity || 0}%</p>
+                    <p className="mt-2 text-2xl font-black leading-none tabular-nums tracking-tight text-slate-950 dark:text-white sm:text-3xl">{formatPercent(result.analysis?.visualSimilarity)}%</p>
                   </div>
                 </div>
                 <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">

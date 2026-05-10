@@ -111,6 +111,38 @@ class DynamicComparator:
                 "recommendation": "MENTOR_REVIEW",
             }
 
+        logger = None
+        try:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info("[DynamicComparator] Template keys: %s", list(self.template.keys()))
+            logger.info("[DynamicComparator] Uploaded keys: %s", list(uploaded_profile.keys()))
+        except Exception:
+            pass
+
+        exact_hash_match = self._has_exact_hash_match(uploaded_profile)
+        if exact_hash_match:
+            return {
+                "fraudProbability": 0.0,
+                "confidence": 100.0,
+                "metrics": {
+                    "nameSimilarity": 100.0,
+                    "visualSimilarity": 100.0,
+                    "spacingSimilarity": 100.0,
+                    "alignmentSimilarity": 100.0,
+                    "structureSimilarity": 100.0,
+                    "qrSimilarity": 100.0,
+                    "logoSimilarity": 100.0,
+                },
+                "anomalies": [],
+                "explanations": [
+                    "Exact hash match found between uploaded certificate and trained template sample",
+                    "Certificate features align with the learned template profile",
+                ],
+                "recommendation": "VERIFIED",
+                "verificationStatus": "VERIFIED",
+            }
+
         # Real comparison metrics
         metrics = {
             "nameSimilarity": self._compare_name(
@@ -140,6 +172,7 @@ class DynamicComparator:
 
         # Determine recommendation
         recommendation = self._recommend_action(fraud_probability, anomalies)
+        verification_status = self._verification_status(fraud_probability, metrics, anomalies)
 
         return {
             "fraudProbability": round(fraud_probability, 2),
@@ -148,7 +181,21 @@ class DynamicComparator:
             "anomalies": anomalies,
             "explanations": explanations,
             "recommendation": recommendation,
+            "verificationStatus": verification_status,
         }
+
+    def _has_exact_hash_match(self, uploaded_profile: dict[str, Any]) -> bool:
+        uploaded_hash = uploaded_profile.get("imageHash") or uploaded_profile.get("perceptualHash")
+        template_hashes = self.hashes.get("binary", []) if isinstance(self.hashes, dict) else []
+        perceptual_hashes = self.hashes.get("perceptual", []) if isinstance(self.hashes, dict) else []
+
+        if uploaded_hash and uploaded_hash in template_hashes:
+            return True
+        if uploaded_hash and uploaded_hash in perceptual_hashes:
+            return True
+        if uploaded_profile.get("imageHash") and uploaded_profile.get("imageHash") == self.template.get("imageHash"):
+            return True
+        return False
 
     def _compare_name(self, student_name: str, ocr_text: str) -> float:
         """
@@ -379,17 +426,16 @@ class DynamicComparator:
         template_hash = self.template.get("imageHash")
 
         if uploaded_hash and template_hash and uploaded_hash == template_hash:
-            return 95  # Identical image
+            return 100  # Identical image
+
+        if uploaded_hash and uploaded_hash in (self.hashes.get("binary", []) if isinstance(self.hashes, dict) else []):
+            return 100
 
         # Use image hash similarity if imagehash available
         try:
-            if imagehash:
-                uploaded_hash_obj = imagehash.ImageHash(
-                    uploaded_profile.get("perceptualHash")
-                )
-                template_hash_obj = imagehash.ImageHash(
-                    self.template.get("perceptualHash")
-                )
+            if imagehash and uploaded_profile.get("perceptualHash") and self.template.get("perceptualHash"):
+                uploaded_hash_obj = imagehash.hex_to_hash(uploaded_profile.get("perceptualHash"))
+                template_hash_obj = imagehash.hex_to_hash(self.template.get("perceptualHash"))
                 # Hash distance: 0 = identical, < 5 = similar
                 distance = uploaded_hash_obj - template_hash_obj
                 similarity = max(0, 100 - distance * 10)
@@ -411,6 +457,15 @@ class DynamicComparator:
             return 20  # Logo removed!
         else:
             return 50
+
+    def _verification_status(self, fraud_probability: float, metrics: dict[str, float], anomalies: list[dict[str, Any]]) -> str:
+        if fraud_probability <= 5 and not anomalies and metrics["visualSimilarity"] >= 98:
+            return "VERIFIED"
+        if fraud_probability >= 80:
+            return "POSSIBLE_FORGERY"
+        if fraud_probability >= 65 or anomalies:
+            return "SUSPICIOUS"
+        return "PENDING"
 
     def _detect_anomalies(
         self, uploaded_profile: dict[str, Any], metrics: dict[str, float]

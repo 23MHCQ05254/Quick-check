@@ -3,7 +3,6 @@ import crypto from 'crypto';
 import fs from 'fs';
 import FormData from 'form-data';
 import { textFingerprint, tokenSimilarity } from '../utils/text.js';
-import * as mockAiService from './mockAiService.js';
 
 const fallbackHash = (filePath) => {
   try {
@@ -13,47 +12,16 @@ const fallbackHash = (filePath) => {
   }
 };
 
-/**
- * REAL DYNAMIC ANALYSIS - No hardcoded fraud scores
- * 
- * The fallback now returns a meaningful error instead of fake data.
- * This forces proper AI service configuration and real analysis.
- */
-const unsupportedFallback = ({ filePath, studentName, certificateId, issueDate, organizationName, templateProfile }) => {
-  console.warn(
-    '[quickcheck-ai] Real analysis requires AI service. ' +
-    'Returning error response to enforce dynamic analysis. ' +
-    'AI_SERVICE_URL=' + (process.env.AI_SERVICE_URL || 'not configured')
-  );
-  
+const aiBaseUrl = () => process.env.AI_SERVICE_URL || 'http://localhost:8000';
+
+const normalizeTemplateProfile = (templateProfile = {}) => {
+  const learnedProfile = templateProfile.learnedProfile || templateProfile.extractedProfile || templateProfile.extractedTemplateData || templateProfile;
   return {
-    fraudProbability: null,
-    confidence: null,
-    nameSimilarity: null,
-    visualSimilarity: null,
-    qrData: '',
-    ocrText: '',
-    imageHash: fallbackHash(filePath),
-    textFingerprint: '',
-    extractedFields: {
-      certificateId,
-      issueDate,
-      organization: organizationName,
-      studentName
-    },
-    suspiciousIndicators: [
-      'AI Service unavailable - Analysis requires real service connection',
-      'Dynamic analysis cannot be performed without proper AI service'
-    ],
-    anomalies: [
-      {
-        code: 'AI_SERVICE_UNAVAILABLE',
-        severity: 'CRITICAL',
-        message: 'Real certificate analysis requires connected AI service. Please ensure AI_SERVICE_URL is configured and service is running.'
-      }
-    ],
-    recommendation: 'MENTOR_REVIEW',
-    error: 'REAL_ANALYSIS_REQUIRED'
+    certificationId: templateProfile.certificationId || templateProfile.certification?._id || templateProfile.certification || '',
+    thresholds: templateProfile.thresholds || learnedProfile.thresholds || {},
+    metadata: templateProfile.metadata || learnedProfile.metadata || {},
+    extractedProfile: learnedProfile,
+    ...learnedProfile
   };
 };
 
@@ -65,30 +33,38 @@ const unsupportedFallback = ({ filePath, studentName, certificateId, issueDate, 
  */
 export const analyzeCertificateWithAi = async (payload) => {
   try {
-    console.log(`[quickcheck-ai] Certificate analysis: Verifying ${payload.studentName}'s certificate...`);
-    
-    // Read the certificate file
-    const fileBuffer = fs.readFileSync(payload.filePath);
-    
-    // Use mock AI service to analyze against template
-    const result = await mockAiService.analyzeCertificate(
-      fileBuffer,
-      payload.studentName,
-      payload.certificateId,
-      payload.templateProfile
-    );
-    
-    if (!result.success) {
-      throw new Error('Certificate analysis failed');
-    }
-    
-    console.log(`[quickcheck-ai] ✓ Analysis complete - Fraud Probability: ${result.certificate.fraudProbability}%`);
-    console.log(`[quickcheck-ai] Recommendation: ${result.certificate.recommendation}`);
-    
-    return result.certificate;
+    const templateProfile = normalizeTemplateProfile(payload.templateProfile);
+    const aiUrl = aiBaseUrl();
+    console.log(`[quickcheck-ai] Certificate analysis starting for ${payload.studentName}`);
+    console.log('[quickcheck-ai] Loaded template profile keys:', Object.keys(templateProfile));
+
+    const form = new FormData();
+    form.append('file', fs.createReadStream(payload.filePath));
+    form.append('student_name', payload.studentName || '');
+    form.append('certificate_id', payload.certificateId || '');
+    form.append('issue_date', payload.issueDate || '');
+    form.append('organization', payload.organizationName || '');
+    form.append('template_profile', JSON.stringify(templateProfile));
+
+    const { data } = await axios.post(`${aiUrl}/analyze`, form, {
+      headers: form.getHeaders(),
+      timeout: 45000,
+      maxBodyLength: Infinity
+    });
+
+    console.log('[quickcheck-ai] AI response received');
+    console.log('[quickcheck-ai] Comparison metrics:', JSON.stringify({
+      fraudProbability: data.fraudProbability,
+      confidence: data.confidence,
+      nameSimilarity: data.nameSimilarity,
+      visualSimilarity: data.visualSimilarity,
+      verificationStatus: data.verificationStatus
+    }, null, 2));
+
+    return data;
   } catch (error) {
     console.error(`[quickcheck-ai] Analysis failed: ${error.message}`);
-    return unsupportedFallback(payload);
+    throw new Error(`AI analysis failed: ${error.message}. Ensure the AI service is running at ${aiBaseUrl()}.`);
   }
 };
 
@@ -98,35 +74,42 @@ export const analyzeCertificateWithAi = async (payload) => {
  */
 export const extractTemplateProfileWithAi = async ({ files, certificationId }) => {
   try {
-    // Use mock AI service to learn from uploaded certificate samples
+    const aiUrl = aiBaseUrl();
     console.log(`[quickcheck-ai] Template extraction: Learning from ${files?.length || 0} certificate sample(s)...`);
-    
+
     if (!files || files.length === 0) {
       throw new Error('No files provided for template extraction');
     }
-    
-    const result = await mockAiService.extractTemplateProfile(files, certificationId);
-    
-    if (!result.success) {
-      throw new Error('Template extraction failed');
+
+    const form = new FormData();
+    form.append('certification_id', certificationId);
+    files.forEach((file) => form.append('files', fs.createReadStream(file.path)));
+
+    const { data } = await axios.post(`${aiUrl}/templates/extract`, form, {
+      headers: form.getHeaders(),
+      timeout: 60000,
+      maxBodyLength: Infinity
+    });
+
+    if (!data?.extractedProfile) {
+      throw new Error('AI service returned incomplete template data');
     }
-    
-    console.log(`[quickcheck-ai] ✓ Template learned successfully from ${result.samplesAnalyzed.length} samples`);
-    console.log(`[quickcheck-ai] Extracted: OCR blocks, text coordinates, QR patterns, logo hashes, color profiles, fonts`);
-    
+
+    console.log('[quickcheck-ai] Template extraction complete');
+    console.log('[quickcheck-ai] Extracted template keys:', Object.keys(data.extractedProfile || {}));
+    console.log('[quickcheck-ai] Learned thresholds:', JSON.stringify(data.thresholds || {}, null, 2));
+
     return {
-      extractedProfile: result.extractedProfile,
-      extractedTemplateData: result.extractedProfile,
-      thresholds: result.thresholds,
-      trainedSamplesCount: result.samplesAnalyzed.length,
-      message: result.message
+      extractedProfile: data.extractedProfile,
+      extractedTemplateData: data.extractedProfile,
+      thresholds: data.thresholds,
+      trainedSamplesCount: data.sampleCount || files.length,
+      message: `Template profile learned from ${data.sampleCount || files.length} sample(s).`
     };
   } catch (error) {
     console.error(`[quickcheck-ai] Template learning failed: ${error.message}`);
     console.error('[quickcheck-ai] Full error:', error);
-    throw new Error(
-      `Template learning failed: ${error.message}. Ensure reference certificates are in valid format (PNG, JPG, PDF).`
-    );
+    throw new Error(`Template learning failed: ${error.message}. Ensure the AI service is running at ${aiBaseUrl()}.`);
   }
 };
 

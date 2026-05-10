@@ -371,8 +371,12 @@ def analyze(
     except json.JSONDecodeError:
         template = {}
 
+    logger.info("[AI analyze] student_name=%s certificate_id=%s organization=%s file=%s", student_name, certificate_id, organization, file.filename)
+    logger.info("[AI analyze] template keys=%s", list(template.keys()))
+
     # Extract real features from uploaded certificate
     profile = extract_image_profile(path)
+    logger.info("[AI analyze] extracted profile=%s", json.dumps(profile, default=str))
     extracted_id = extract_certificate_id(profile.get("ocrText", ""), certificate_id)
     
     # Use DynamicComparator for REAL analysis
@@ -383,6 +387,8 @@ def analyze(
             student_name=student_name,
             certificate_id=extracted_id,
         )
+        logger.info("[AI analyze] comparison metrics=%s", json.dumps(comparison.get("metrics", {}), default=str))
+        logger.info("[AI analyze] comparison anomalies=%s", json.dumps(comparison.get("anomalies", []), default=str))
         
         # Merge real metrics into response
         name_match = {
@@ -406,6 +412,8 @@ def analyze(
             "suspiciousIndicators": comparison["explanations"],
             "anomalies": comparison["anomalies"],
             "recommendation": comparison["recommendation"],
+            "verificationStatus": comparison.get("verificationStatus", "PENDING"),
+            "verificationStatus": comparison.get("verificationStatus", "PENDING"),
         }
     else:
         # Fallback to old logic if DynamicComparator unavailable
@@ -463,12 +471,15 @@ def extract_template_profile(
 
     extractor = TemplateExtractor()
     profiles = []
+
+    logger.info("[AI templates.extract] certification_id=%s sample_count=%s", certification_id, len(files))
     
     # Extract profiles from ALL samples
     for upload in files:
         path = save_upload(upload)
         try:
             profile = extractor.extract_image_profile(path)
+            logger.info("[AI templates.extract] file=%s extracted_profile=%s", upload.filename, json.dumps(profile, default=str))
             # Extract spatial relationships
             if profile.get("components"):
                 relationships = extractor.extract_spatial_relationships(
@@ -490,10 +501,12 @@ def extract_template_profile(
 
     # Aggregate all profiles into stable template
     extracted = TemplateAggregator.aggregate_profiles(profiles)
+    logger.info("[AI templates.extract] aggregated_profile=%s", json.dumps(extracted, default=str))
 
     # Calculate REAL thresholds from aggregated data
     # These are NOT hardcoded - they're computed from actual feature distributions
     thresholds = _calculate_real_thresholds(extracted, profiles)
+    logger.info("[AI templates.extract] thresholds=%s", json.dumps(thresholds, default=str))
 
     return {
         "extractedProfile": extracted,

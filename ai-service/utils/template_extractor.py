@@ -17,7 +17,11 @@ import cv2
 import imagehash
 import numpy as np
 from PIL import Image, ImageStat
-from pyzbar.pyzbar import decode as decode_qr
+
+try:
+    from pyzbar.pyzbar import decode as decode_qr
+except Exception:
+    decode_qr = None
 
 try:
     import pytesseract

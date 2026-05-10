@@ -14,40 +14,13 @@ const templateProfileSchema = new mongoose.Schema(
         imageHash: String
       }
     ],
-    // legacy extractedProfile kept for backward compatibility
-    extractedProfile: {
-      resolution: {
-        width: Number,
-        height: Number,
-        aspectRatio: Number
-      },
-      dominantColors: [String],
-      brightness: Number,
-      edgeDensity: Number,
-      textDensity: Number,
-      qrRegions: [Object],
-      logoRegions: [Object],
-      textBlocks: [Object],
-      metadata: Object
-    },
-
-    // New comprehensive template data produced by AI training
-    extractedTemplateData: {
-      ocrBlocks: [Object],
-      textCoordinates: [Object],
-      qrData: [Object],
-      qrCoordinates: [Object],
-      logoHashes: [String],
-      signatureRegions: [Object],
-      colorProfiles: [Object],
-      fontMetadata: [Object],
-      spacingPatterns: [Object],
-      layoutVectors: [Object],
-      imageHashes: [String],
-      securityMarkers: [Object],
-      visualFingerprint: Object,
-      averageTemplateScore: { type: Number, default: null }
-    },
+    
+    // Learned template payload from the AI service. Stored as Mixed so the
+    // full extracted structure (components, relationships, hashes, metadata)
+    // survives MongoDB persistence without schema stripping.
+    extractedProfile: { type: mongoose.Schema.Types.Mixed },
+    extractedTemplateData: { type: mongoose.Schema.Types.Mixed },
+    learnedProfile: { type: mongoose.Schema.Types.Mixed },
     thresholds: {
       // thresholds are advisory and should be computed by AI; defaults removed to avoid hardcoding
       nameSimilarity: { type: Number },
