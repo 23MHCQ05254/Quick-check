@@ -12,104 +12,85 @@ const fallbackHash = (filePath) => {
   }
 };
 
-const aiBaseUrl = () => process.env.AI_SERVICE_URL || 'http://localhost:8000';
+/**
+ * REAL DYNAMIC ANALYSIS - No hardcoded fraud scores
+ * 
+ * The fallback now throws an error instead of fake data.
+ * This forces proper AI service configuration and real analysis.
+ */
+const unsupportedFallback = ({ filePath, studentName, certificateId, issueDate, organizationName, templateProfile }) => {
+  console.error(
+    '[quickcheck-ai] Real analysis requires AI service. ' +
+    'AI_SERVICE_URL=' + (process.env.AI_SERVICE_URL || 'not configured')
+  );
 
-const normalizeTemplateProfile = (templateProfile = {}) => {
-  const learnedProfile = templateProfile.learnedProfile || templateProfile.extractedProfile || templateProfile.extractedTemplateData || templateProfile;
-  return {
-    certificationId: templateProfile.certificationId || templateProfile.certification?._id || templateProfile.certification || '',
-    thresholds: templateProfile.thresholds || learnedProfile.thresholds || {},
-    metadata: templateProfile.metadata || learnedProfile.metadata || {},
-    extractedProfile: learnedProfile,
-    ...learnedProfile
-  };
+  throw new Error(
+    'AI service is unavailable. Real certificate analysis requires the AI service to be running on ' +
+    (process.env.AI_SERVICE_URL || 'http://localhost:8001') +
+    '. Please start the AI service and ensure it is accessible.'
+  );
 };
 
-/**
- * MOCK AI ANALYSIS - Learns from template and analyzes student certificates
- * 
- * Uses the learned template profile to verify student uploads
- * Simulates OCR, visual matching, QR detection, color profile comparison
- */
 export const analyzeCertificateWithAi = async (payload) => {
-  try {
-    const templateProfile = normalizeTemplateProfile(payload.templateProfile);
-    const aiUrl = aiBaseUrl();
-    console.log(`[quickcheck-ai] Certificate analysis starting for ${payload.studentName}`);
-    console.log('[quickcheck-ai] Loaded template profile keys:', Object.keys(templateProfile));
+  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
 
+  try {
     const form = new FormData();
     form.append('file', fs.createReadStream(payload.filePath));
-    form.append('student_name', payload.studentName || '');
+    form.append('student_name', payload.studentName);
     form.append('certificate_id', payload.certificateId || '');
     form.append('issue_date', payload.issueDate || '');
     form.append('organization', payload.organizationName || '');
-    form.append('template_profile', JSON.stringify(templateProfile));
+    form.append('template_profile', JSON.stringify(payload.templateProfile || {}));
 
     const { data } = await axios.post(`${aiUrl}/analyze`, form, {
       headers: form.getHeaders(),
-      timeout: 45000,
+      timeout: 30000,
       maxBodyLength: Infinity
     });
 
-    console.log('[quickcheck-ai] AI response received');
-    console.log('[quickcheck-ai] Comparison metrics:', JSON.stringify({
-      fraudProbability: data.fraudProbability,
-      confidence: data.confidence,
-      nameSimilarity: data.nameSimilarity,
-      visualSimilarity: data.visualSimilarity,
-      verificationStatus: data.verificationStatus
-    }, null, 2));
+    // Ensure real analysis data is returned
+    if (!data || data.error === 'REAL_ANALYSIS_REQUIRED') {
+      throw new Error('AI service returned unsupported response');
+    }
 
     return data;
   } catch (error) {
     console.error(`[quickcheck-ai] Analysis failed: ${error.message}`);
-    throw new Error(`AI analysis failed: ${error.message}. Ensure the AI service is running at ${aiBaseUrl()}.`);
+    throw error; // Throw error instead of returning fake data
   }
 };
 
 /**
- * Extract template profile - Uses mock AI to learn from uploaded samples
- * Extracts OCR, colors, logos, and visual patterns from certificate samples
+ * Extract template profile - enforces real template learning
  */
 export const extractTemplateProfileWithAi = async ({ files, certificationId }) => {
+  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+
   try {
-    const aiUrl = aiBaseUrl();
-    console.log(`[quickcheck-ai] Template extraction: Learning from ${files?.length || 0} certificate sample(s)...`);
-
-    if (!files || files.length === 0) {
-      throw new Error('No files provided for template extraction');
-    }
-
     const form = new FormData();
     form.append('certification_id', certificationId);
     files.forEach((file) => form.append('files', fs.createReadStream(file.path)));
 
     const { data } = await axios.post(`${aiUrl}/templates/extract`, form, {
       headers: form.getHeaders(),
-      timeout: 60000,
+      timeout: 45000,
       maxBodyLength: Infinity
     });
 
-    if (!data?.extractedProfile) {
+    // Ensure real template data is returned
+    if (!data || !data.extractedProfile) {
       throw new Error('AI service returned incomplete template data');
     }
 
-    console.log('[quickcheck-ai] Template extraction complete');
-    console.log('[quickcheck-ai] Extracted template keys:', Object.keys(data.extractedProfile || {}));
-    console.log('[quickcheck-ai] Learned thresholds:', JSON.stringify(data.thresholds || {}, null, 2));
-
-    return {
-      extractedProfile: data.extractedProfile,
-      extractedTemplateData: data.extractedProfile,
-      thresholds: data.thresholds,
-      trainedSamplesCount: data.sampleCount || files.length,
-      message: `Template profile learned from ${data.sampleCount || files.length} sample(s).`
-    };
+    return data;
   } catch (error) {
-    console.error(`[quickcheck-ai] Template learning failed: ${error.message}`);
-    console.error('[quickcheck-ai] Full error:', error);
-    throw new Error(`Template learning failed: ${error.message}. Ensure the AI service is running at ${aiBaseUrl()}.`);
+    console.error(`[quickcheck-ai] Template extraction failed: ${error.message}`);
+    throw new Error(
+      `Real template learning failed: ${error.message}. ` +
+      'Please ensure AI_SERVICE_URL is configured and service is running. ' +
+      `Current URL: ${aiUrl}`
+    );
   }
 };
 

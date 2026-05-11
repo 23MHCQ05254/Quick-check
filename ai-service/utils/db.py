@@ -116,7 +116,6 @@ class MongoDBManager:
             },
             "status": "ACTIVE",
         }
-
         result = self.db.template_profiles.insert_one(template)
         return str(result.inserted_id)
 

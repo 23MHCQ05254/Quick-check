@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   catalogFacets,
+  getCatalog,
   createCertification,
   createOrganization,
   deleteCertification,
@@ -34,6 +35,8 @@ const certificationSchema = {
 };
 
 router.use(protect);
+
+router.get('/', getCatalog);
 
 router.get('/certifications', listCatalog);
 router.get('/certifications/:id', getCertification);

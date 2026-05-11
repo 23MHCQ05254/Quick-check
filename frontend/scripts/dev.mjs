@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { mkdir } from 'node:fs/promises';
 import process from 'node:process';
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -69,23 +70,48 @@ const spawnChild = (label, args, env = {}) => {
   return child;
 };
 
-const startFrontend = () => {
+const startFrontend = async () => {
   if (frontendStarted || !backendPort) {
     return;
   }
 
   frontendStarted = true;
   const apiUrl = `http://localhost:${backendPort}/api`;
+
+  // Only write .env.local if it doesn't exist or has a different port
   const envPath = path.join(process.cwd(), '.env.local');
-  writeFile(envPath, `VITE_API_URL=${apiUrl}\nVITE_API_BASE_URL=${apiUrl}\n`, 'utf8').catch((error) => {
-    log('dev', `Unable to write frontend/.env.local: ${error.message}`);
-  });
-  spawnChild('frontend', ['exec', 'vite', '--', '--host', '0.0.0.0'], {
+  let shouldWrite = true;
+  try {
+    const existing = (await import('fs/promises')).readFileSync(envPath, 'utf8');
+    if (existing.includes(`localhost:${backendPort}`)) {
+      shouldWrite = false;
+    }
+  } catch (e) {
+    // file doesn't exist, write it
+  }
+
+  if (shouldWrite) {
+    (await import('fs/promises')).writeFile(envPath, `VITE_API_URL=${apiUrl}\nVITE_API_BASE_URL=${apiUrl}\n`, 'utf8').catch((error) => {
+      log('dev', `Unable to write frontend/.env.local: ${error.message}`);
+    });
+  }
+
+  // Write public/backend.json for runtime discovery
+  try {
+    const publicDir = path.join(process.cwd(), 'public');
+    await mkdir(publicDir, { recursive: true });
+    const backendJsonPath = path.join(publicDir, 'backend.json');
+    await writeFile(backendJsonPath, JSON.stringify({ apiUrl: apiUrl }), 'utf8');
+  } catch (err) {
+    log('dev', `Unable to write public/backend.json: ${err.message}`);
+  }
+
+  spawnChild('frontend', ['exec', 'vite', '--', '--host', '0.0.0.0', '--port', '5173'], {
     VITE_API_URL: apiUrl,
     VITE_API_BASE_URL: apiUrl
   });
 };
 
 spawnChild('backend', ['run', 'dev', '--prefix', '../backend'], {
-  PORT: '0'
+  PORT: '8000'
 });

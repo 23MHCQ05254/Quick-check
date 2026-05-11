@@ -13,7 +13,7 @@ export default function TemplateManager() {
   const [message, setMessage] = useState('');
   const [training, setTraining] = useState(false);
   const templates = useAsync(async () => (await api.get('/templates')).data.items, []);
-  const catalog = useAsync(async () => (await api.get('/catalog/certifications', { params: { limit: 48 } })).data.items, []);
+  const catalog = useAsync(async () => (await api.get('/catalog')).data.items, []);
 
   const submit = async (event) => {
     event.preventDefault();

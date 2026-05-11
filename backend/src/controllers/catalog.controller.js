@@ -165,6 +165,60 @@ export const catalogFacets = asyncHandler(async (_req, res) => {
   });
 });
 
+export const getCatalog = asyncHandler(async (_req, res) => {
+  console.log('[catalog.getCatalog] Fetching active certifications...');
+
+  if (isDemoMode()) {
+    console.log('[catalog.getCatalog] Demo mode - using demoStore');
+    const result = await demoStore.listCatalog({});
+    const mapped = result.items.map((i) => ({
+      _id: i._id || i.id,
+      id: i._id || i.id,
+      name: i.name || i.certificateName,
+      organization: {
+        _id: i.organization?._id,
+        name: i.organization?.name || i.organization
+      },
+      category: i.category || '',
+      slug: i.slug || '',
+      skills: i.skills || [],
+      active: true
+    }));
+    console.log('[catalog.getCatalog] Returning', mapped.length, 'items from demo store');
+    res.json({ items: mapped });
+    return;
+  }
+
+  // Production mode: fetch from Certification collection
+  try {
+    const items = await Certification.find({ active: true })
+      .populate('organization')
+      .sort({ name: 1 })
+      .select('_id name slug category skills organization active');
+
+    console.log('[catalog.getCatalog] Found', items.length, 'active certifications');
+
+    const mapped = items.map((c) => ({
+      _id: c._id,
+      id: c._id,
+      name: c.name,
+      organization: {
+        _id: c.organization?._id,
+        name: c.organization?.name || ''
+      },
+      category: c.category || '',
+      slug: c.slug || '',
+      skills: c.skills || [],
+      active: c.active
+    }));
+
+    res.json({ items: mapped });
+  } catch (error) {
+    console.error('[catalog.getCatalog] Error fetching certifications:', error);
+    throw error;
+  }
+});
+
 export const createOrganization = asyncHandler(async (req, res) => {
   if (isDemoMode()) {
     const organization = await demoStore.createOrganization(req.body);

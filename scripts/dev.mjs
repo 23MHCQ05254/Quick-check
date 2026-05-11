@@ -45,11 +45,40 @@ const spawnChild = (label, args, env = {}) => {
             const match = data.toString().match(/API listening on http:\/\/localhost:(\d+)/);
             if (match) {
                 backendPort = match[1];
-                startFrontend();
+                // startFrontend(); // Commented out to avoid double backend startup
             }
         }
     });
 
+    child.stderr.on('data', (data) => log(label, data));
+
+    child.on('exit', (code, signal) => {
+        children.delete(child);
+
+        if (signal) {
+            stopAll(0);
+            return;
+        }
+
+        if (code && code !== 0) {
+            stopAll(code);
+        }
+    });
+
+    return child;
+};
+
+const spawnProgram = (label, command, args, env = {}, cwd = process.cwd()) => {
+    const child = spawn(command, args, {
+        cwd,
+        env: { ...process.env, ...env },
+        shell: true,
+        windowsHide: true
+    });
+
+    children.add(child);
+
+    child.stdout.on('data', (data) => log(label, data));
     child.stderr.on('data', (data) => log(label, data));
 
     child.on('exit', (code, signal) => {
@@ -84,6 +113,10 @@ const startFrontend = () => {
     });
 };
 
+const pythonCommand = process.env.PYTHON || (process.platform === 'win32' ? 'py' : 'python');
+spawnProgram('ai', pythonCommand, ['-m', 'uvicorn', 'main:app', '--reload', '--host', '127.0.0.1', '--port', '8001'], {}, 'ai-service');
 spawnChild('backend', ['run', 'dev', '--prefix', 'backend'], {
-    PORT: '0'
+    PORT: '8000',
+    AI_SERVICE_URL: 'http://localhost:8001'
 });
+// startFrontend(); // Commented out to avoid double backend startup

@@ -290,7 +290,7 @@ export default function MentorCatalogManager() {
                     </button>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
 
@@ -299,10 +299,10 @@ export default function MentorCatalogManager() {
             <AnimatePresence>
               {!catalog.loading &&
                 catalog.items.map((certification) => (
-                      <div
-                        key={certification._id || certification.id}
-                        className="rounded-2xl border border-slate-900/10 bg-white/68 p-5 shadow-panel dark:border-white/10 dark:bg-white/[0.055]"
-                      >
+                  <div
+                    key={certification._id || certification.id}
+                    className="rounded-2xl border border-slate-900/10 bg-white/68 p-5 shadow-panel dark:border-white/10 dark:bg-white/[0.055]"
+                  >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -329,14 +329,14 @@ export default function MentorCatalogManager() {
                         </Button>
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
             </AnimatePresence>
           </div>
         </div>
       </div>
 
-      <CertificationDetailsModal certification={details} onClose={() => setDetails(null)} onSelect={() => {}} selected={false} showUploadActions={false} />
+      <CertificationDetailsModal certification={details} onClose={() => setDetails(null)} onSelect={() => { }} selected={false} showUploadActions={false} />
     </div>
   );
 }

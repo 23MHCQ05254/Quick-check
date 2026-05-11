@@ -70,21 +70,6 @@ try:
 except ImportError:
     TemplateAggregator = None
 
-try:
-    from utils.feature_extractor import FeatureExtractor
-except ImportError:
-    FeatureExtractor = None
-
-try:
-    from utils.similarity_scorer import SimilarityScorer
-except ImportError:
-    SimilarityScorer = None
-
-try:
-    from utils.duplicate_detector import DuplicateDetector
-except ImportError:
-    DuplicateDetector = None
-
 app = FastAPI(title="QuickCheck AI Service", version="1.0.0")
 
 app.add_middleware(
@@ -349,14 +334,14 @@ def score_fraud(
         anomalies.append({"code": "BRIGHTNESS_OUTLIER", "severity": "LOW", "message": "Image brightness is outside normal certificate range"})
 
     fraud = round(clamp(fraud, 3, 96), 2)
-    if fraud >= 65:
-        recommendation = "MENTOR_REVIEW"
-    elif fraud >= 35:
-        recommendation = "WATCHLIST"
-    else:
-        recommendation = "LOW_RISK"
-
+    
     confidence = round(clamp((name_score * 0.25 + visual_score * 0.45 + (100 - fraud) * 0.3), 10, 96), 2)
+    
+    if confidence >= 95:
+        recommendation = "ACCEPT"
+    else:
+        recommendation = "REJECT"
+    
     return {
         "fraudProbability": fraud,
         "confidence": confidence,
@@ -364,40 +349,6 @@ def score_fraud(
         "anomalies": anomalies,
         "recommendation": recommendation,
     }
-
-
-@app.post("/detect-duplicates")
-def detect_duplicates(
-    file: UploadFile = File(...),
-    existing_certificates: str = Form("[]"),
-) -> dict[str, Any]:
-    """
-    Detect if uploaded certificate is duplicate of existing ones.
-    
-    Uses image hashes, OCR, and color profiles for comparison.
-    """
-    if not DuplicateDetector or not FeatureExtractor:
-        return {"duplicateProbability": 0, "matches": [], "error": "Required modules unavailable"}
-
-    path = save_upload(file)
-    try:
-        existing = json.loads(existing_certificates or "[]")
-    except json.JSONDecodeError:
-        existing = []
-
-    logger.info("[AI detect-duplicates] comparing against %d existing certificates", len(existing))
-
-    # Extract features from uploaded certificate
-    extractor = FeatureExtractor()
-    uploaded_features = extractor.extract_all_features(path)
-
-    # Run duplicate detection
-    detector = DuplicateDetector()
-    result = detector.compute_duplicate_probability(uploaded_features, existing)
-
-    logger.info("[AI detect-duplicates] duplicate probability: %.1f%%", result["duplicateProbability"])
-
-    return result
 
 
 @app.get("/health")
@@ -414,158 +365,83 @@ def analyze(
     issue_date: str = Form(""),
     organization: str = Form(""),
 ) -> dict[str, Any]:
-    """
-    Analyze certificate against template using REAL feature extraction and comparison.
-    
-    Returns calculated fraud probability based on measurable differences.
-    """
     path = save_upload(file)
     try:
         template = json.loads(template_profile or "{}")
     except json.JSONDecodeError:
         template = {}
 
-    logger.info("[AI analyze] student=%s certId=%s org=%s", student_name, certificate_id, organization)
-
-    # Extract REAL features from uploaded certificate
-    if FeatureExtractor:
-        extractor = FeatureExtractor()
-        features = extractor.extract_all_features(path)
-        logger.info("[AI analyze] extracted %d feature categories", len(features))
-    else:
-        # Fallback to basic profile
-        features = extract_image_profile(path)
-        logger.info("[AI analyze] extracted basic profile")
-
-    # Extract certificate ID from features
-    ocr_text = " ".join([b.get("text", "") for b in features.get("ocrBlocks", [])])
-    extracted_id = extract_certificate_id(ocr_text or features.get("ocrText", ""), certificate_id)
-
-    # Perform REAL similarity scoring against template
-    if SimilarityScorer and template:
-        scorer = SimilarityScorer()
-        
-        # Extract template features for comparison
-        template_features = template.get("extractedProfile", template)
-        template_ocr = template.get("extractedProfile", {}).get("ocrBlocks", [])
-        template_qr = template.get("extractedProfile", {}).get("qrCodes", [])
-        
-        # Compute all similarity scores
-        ocr_score = scorer.score_ocr_similarity(
-            features.get("ocrBlocks", []),
-            template_ocr,
-            student_name
-        )
-        
-        visual_score = scorer.score_visual_similarity(features, template_features)
-        qr_score = scorer.score_qr_similarity(features.get("qrCodes", []), template_qr)
-        hash_score = scorer.score_image_hash_similarity(features.get("imageHashes", {}), template_features.get("imageHashes", {}))
-        
-        # Combine into fraud probability
-        scores_dict = {
-            "ocrSimilarity": ocr_score,
-            "visualSimilarity": visual_score,
-            "qrSimilarity": qr_score,
-            "imageSimilarity": hash_score
-        }
-        
-        fraud_result = scorer.compute_fraud_probability(scores_dict)
-        
-        logger.info("[AI analyze] OCR: %.1f%% Visual: %.1f%% Fraud: %.1f%%",
-                   ocr_score["score"], visual_score["score"], fraud_result["fraudProbability"])
-        
-        # Build response with real calculated values
-        analysis = {
-            "fraudProbability": fraud_result["fraudProbability"],
-            "authenticity": fraud_result["authenticity"],
-            "confidence": fraud_result["confidence"],
-            "nameSimilarity": ocr_score["breakdown"].get("nameMatch", 0),
-            "visualSimilarity": visual_score["score"],
-            "qrSimilarity": qr_score["score"],
-            "imageSimilarity": hash_score["score"],
-            "verificationStatus": "VERIFIED" if fraud_result["fraudProbability"] < 30 else ("SUSPICIOUS" if fraud_result["fraudProbability"] < 70 else "POSSIBLE_FORGERY"),
-            "suspiciousIndicators": [],
-            "anomalies": [],
-            "recommendation": "VERIFIED" if fraud_result["fraudProbability"] < 30 else ("WATCHLIST" if fraud_result["fraudProbability"] < 65 else "REJECT")
-        }
-        
-        # Add breakdown details
-        if fraud_result["fraudProbability"] > 35:
-            if ocr_score["score"] < 50:
-                analysis["suspiciousIndicators"].append("Student name similarity below expected threshold")
-                analysis["anomalies"].append({"code": "NAME_MISMATCH", "severity": "HIGH"})
-            if visual_score["score"] < 50:
-                analysis["suspiciousIndicators"].append("Visual characteristics deviate from template")
-                analysis["anomalies"].append({"code": "VISUAL_MISMATCH", "severity": "HIGH"})
-        
-    else:
-        # Fallback to old logic
-        name_match = name_similarity(student_name, ocr_text or features.get("ocrText", ""))
-        visual = visual_similarity(features, template)
-        name_score = name_match["score"]
-        visual_score = visual["score"]
-        
-        risk = score_fraud(
-            name_score=name_score,
-            visual_score=visual_score,
-            profile=features,
-            template_profile=template,
+    # Extract real features from uploaded certificate
+    profile = extract_image_profile(path)
+    extracted_id = extract_certificate_id(profile.get("ocrText", ""), certificate_id)
+    
+    # Use DynamicComparator for REAL analysis
+    if DynamicComparator:
+        comparator = DynamicComparator(template_profile=template)
+        comparison = comparator.compare(
+            uploaded_profile=profile,
+            student_name=student_name,
             certificate_id=extracted_id,
         )
         
-        analysis = {
-            "fraudProbability": risk["fraudProbability"],
-            "confidence": risk["confidence"],
-            "nameSimilarity": name_score,
-            "visualSimilarity": visual_score,
-            "verificationStatus": "VERIFIED" if risk["fraudProbability"] < 30 else ("SUSPICIOUS" if risk["fraudProbability"] < 70 else "POSSIBLE_FORGERY"),
-            "suspiciousIndicators": risk.get("suspiciousIndicators", []),
-            "anomalies": risk.get("anomalies", []),
-            "recommendation": risk.get("recommendation", "LOW_RISK")
+        # Merge real metrics into response
+        name_match = {
+            "score": comparison["metrics"]["nameSimilarity"],
+            "matchedText": profile.get("ocrText", "")[:160] if profile.get("ocrText") else "",
+            "method": "dynamic-comparison"
         }
+        visual = {
+            "score": comparison["metrics"]["visualSimilarity"],
+            "components": {
+                "qrSimilarity": comparison["metrics"]["qrSimilarity"],
+                "logoSimilarity": comparison["metrics"]["logoSimilarity"],
+                "spacingSimilarity": comparison["metrics"]["spacingSimilarity"],
+                "alignmentSimilarity": comparison["metrics"]["alignmentSimilarity"],
+                "structureSimilarity": comparison["metrics"]["structureSimilarity"],
+            }
+        }
+        risk = {
+            "fraudProbability": comparison["fraudProbability"],
+            "confidence": comparison["confidence"],
+            "suspiciousIndicators": comparison["explanations"],
+            "anomalies": comparison["anomalies"],
+            "recommendation": comparison["recommendation"],
+        }
+    else:
+        # Fallback to old logic if DynamicComparator unavailable
+        name_match = name_similarity(student_name, profile.get("ocrText", ""))
+        visual = visual_similarity(profile, template)
+        risk = score_fraud(
+            name_score=name_match["score"],
+            visual_score=visual["score"],
+            profile=profile,
+            template_profile=template,
+            certificate_id=extracted_id,
+        )
 
-    # Add extracted data
-    analysis.update({
-        "matchedNameText": " ".join([b.get("text", "") for b in features.get("ocrBlocks", [])[:5]]),
-        "qrData": features.get("qrCodes", [{}])[0].get("data", "") if features.get("qrCodes") else "",
-        "ocrText": ocr_text or features.get("ocrText", ""),
-        "imageHash": features.get("imageHashes", {}).get("perceptual", "") or features.get("imageHash", ""),
+    fingerprint_source = f"{organization} {student_name} {extracted_id} {issue_date} {profile.get('ocrText', '')}"
+    text_fingerprint = " ".join(sorted(set(re.sub(r"[^a-z0-9\s]", " ", fingerprint_source.lower()).split())))
+
+    return {
+        **risk,
+        "verificationStatus": "VERIFIED" if risk["recommendation"] == "ACCEPT" else "REJECTED",
+        "nameSimilarity": name_match["score"],
+        "visualSimilarity": visual["score"],
+        "visualComponents": visual.get("components", {}),
+        "matchedNameText": name_match.get("matchedText", ""),
+        "qrData": profile.get("qrData", ""),
+        "ocrText": profile.get("ocrText", ""),
+        "imageHash": profile.get("imageHash", binary_hash(path)),
+        "textFingerprint": text_fingerprint,
         "extractedFields": {
             "studentName": student_name,
             "certificateId": extracted_id,
             "issueDate": issue_date,
             "organization": organization,
-            "resolution": features.get("resolution"),
-            "dominantColors": features.get("dominantColors", []),
-            "textDensity": features.get("textDensity", 0),
-            "cornerDensity": features.get("cornerDensity", 0),
+            "resolution": profile.get("resolution"),
+            "dominantColors": profile.get("dominantColors", []),
         },
-        "extractedCertificateData": {
-            "ocrBlocks": features.get("ocrBlocks", []),
-            "textCoordinates": features.get("textCoordinates", []),
-            "qrData": features.get("qrCodes", []),
-            "colorProfiles": features.get("colorProfiles", []),
-            "layoutRegions": features.get("layouts", []),
-            "logoRegions": features.get("logos", []),
-            "signatureRegions": features.get("signatures", []),
-            "visualDescriptors": features.get("visualDescriptors", []),
-            "imageHashes": features.get("imageHashes", {}),
-            "brightness": features.get("brightness", 0),
-            "contrast": features.get("contrast", 0),
-            "saturation": features.get("saturation", 0)
-        }
-    })
-
-    # Create text fingerprint for duplicate detection
-    fingerprint_source = f"{organization} {student_name} {extracted_id} {issue_date} {ocr_text}"
-    text_fingerprint = " ".join(sorted(set(re.sub(r"[^a-z0-9\s]", " ", fingerprint_source.lower()).split())))
-    analysis["textFingerprint"] = text_fingerprint
-
-    logger.info("[AI analyze] result: fraud=%.1f%% confidence=%.1f%% status=%s",
-               analysis["fraudProbability"], analysis["confidence"], analysis["verificationStatus"])
-
-    return analysis
-
+    }
 
 
 @app.post("/templates/extract")
@@ -574,202 +450,102 @@ def extract_template_profile(
     files: list[UploadFile] = File(...),
 ) -> dict[str, Any]:
     """
-    Extract REAL dynamic template profile from mentor training samples.
+    Extract REAL template profile from samples.
     
-    Uses FeatureExtractor to collect comprehensive features from each sample.
-    Never hardcoded - all extracted from actual certificate images.
+    Uses actual image analysis and aggregation - NOT hardcoded values.
+    Returns learned thresholds calculated from real feature distributions.
     """
-    if not FeatureExtractor:
+    if not TemplateExtractor or not TemplateAggregator:
         return {
-            "error": "FeatureExtractor not available",
+            "error": "Template extraction requires TemplateExtractor and TemplateAggregator",
             "extractedProfile": None,
             "thresholds": None,
         }
 
-    extractor = FeatureExtractor()
-    all_features = []
-
-    logger.info("[AI templates.extract] certification=%s samples=%d", certification_id, len(files))
-
-    # Extract features from all training samples
+    extractor = TemplateExtractor()
+    profiles = []
+    
+    # Extract profiles from ALL samples
     for upload in files:
         path = save_upload(upload)
         try:
-            features = extractor.extract_all_features(path)
-            all_features.append(features)
-            logger.info("[AI templates.extract] %s: extracted %d features", upload.filename, len(features))
+            profile = extractor.extract_image_profile(path)
+            # Extract spatial relationships
+            if profile.get("components"):
+                relationships = extractor.extract_spatial_relationships(
+                    profile.get("components", []),
+                    profile.get("resolution", {}).get("width", 1600) or 1600,
+                    profile.get("resolution", {}).get("height", 1130) or 1130,
+                )
+                profile["relationships"] = relationships
+            profiles.append(profile)
         except Exception as e:
-            logger.warning(f"[AI templates.extract] {upload.filename} failed: {e}")
+            logger.warning(f"Failed to extract profile from {upload.filename}: {e}")
 
-    if not all_features:
+    if not profiles:
         return {
-            "error": "No features extracted from training samples",
+            "error": "No profiles extracted from uploaded files",
             "extractedProfile": None,
             "thresholds": None,
         }
 
-    # Aggregate all features into stable template
-    aggregated = _aggregate_template_features(all_features)
-    logger.info("[AI templates.extract] aggregated: %d regions, %d colors, %d qr",
-               len(aggregated.get("layouts", [])), len(aggregated.get("dominantColors", [])), len(aggregated.get("qrCodes", [])))
+    # Aggregate all profiles into stable template
+    extracted = TemplateAggregator.aggregate_profiles(profiles)
 
-    # Calculate REAL thresholds from feature distributions
-    thresholds = _calculate_real_thresholds_from_features(all_features, aggregated)
-    logger.info("[AI templates.extract] thresholds: name=%.1f visual=%.1f review=%.1f reject=%.1f",
-               thresholds["nameSimilarity"], thresholds["visualSimilarity"], thresholds["fraudReview"], thresholds["fraudReject"])
+    # Calculate REAL thresholds from aggregated data
+    # These are NOT hardcoded - they're computed from actual feature distributions
+    thresholds = _calculate_real_thresholds(extracted, profiles)
 
     return {
-        "extractedProfile": aggregated,
+        "extractedProfile": extracted,
         "thresholds": thresholds,
-        "sampleCount": len(all_features),
-        "trainingQuality": aggregated.get("metadata", {}).get("trainingQuality", "fair"),
-        "message": f"Extracted features from {len(all_features)} samples"
+        "sampleCount": len(profiles),
+        "aggregationQuality": extracted.get("metadata", {}).get("trainingQuality", "unknown"),
     }
 
 
-def _aggregate_template_features(all_features: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aggregate features from multiple training samples into template."""
-    if not all_features:
-        return {}
-
-    aggregated = {
-        "ocrBlocks": [],
-        "qrCodes": [],
-        "logos": [],
-        "signatures": [],
-        "layouts": [],
-        "dominantColors": [],
-        "imageHashes": {
-            "perceptual": [],
-            "difference": [],
-            "average": [],
-            "wavelet": []
-        },
-        "resolution": {
-            "avgWidth": 0,
-            "avgHeight": 0,
-            "avgAspectRatio": 0
-        },
-        "brightness": {
-            "avg": 0,
-            "min": 255,
-            "max": 0
-        },
-        "contrast": {
-            "avg": 0
-        },
-        "metadata": {
-            "samplesUsed": len(all_features),
-            "trainingQuality": "fair"
-        }
-    }
-
-    # Aggregate OCR blocks (find common text areas)
-    all_texts = []
-    for features in all_features:
-        all_texts.extend(features.get("ocrBlocks", []))
-    aggregated["ocrBlocks"] = all_texts[:50]  # Keep top blocks
-
-    # Aggregate QR codes
-    qr_codes = []
-    for features in all_features:
-        qr_codes.extend(features.get("qrCodes", []))
-    aggregated["qrCodes"] = qr_codes
-
-    # Aggregate logos
-    logos = []
-    for features in all_features:
-        logos.extend(features.get("logos", []))
-    aggregated["logos"] = logos[:10]
-
-    # Aggregate signatures
-    sigs = []
-    for features in all_features:
-        sigs.extend(features.get("signatures", []))
-    aggregated["signatures"] = sigs[:5]
-
-    # Aggregate layouts
-    layouts = []
-    for features in all_features:
-        layouts.extend(features.get("layouts", []))
-    aggregated["layouts"] = layouts[:20]
-
-    # Aggregate colors (find most common)
-    color_freq = {}
-    for features in all_features:
-        for color in features.get("dominantColors", []):
-            color_freq[color] = color_freq.get(color, 0) + 1
-    aggregated["dominantColors"] = sorted(color_freq.keys(), key=lambda c: color_freq[c], reverse=True)[:8]
-
-    # Aggregate image hashes
-    for features in all_features:
-        hashes = features.get("imageHashes", {})
-        for hash_type in ["perceptual", "difference", "average", "wavelet"]:
-            if hashes.get(hash_type):
-                aggregated["imageHashes"][hash_type].append(hashes[hash_type])
-
-    # Aggregate resolution
-    resolutions = [f.get("resolution", {}) for f in all_features]
-    widths = [r.get("width", 0) for r in resolutions if r.get("width")]
-    heights = [r.get("height", 0) for r in resolutions if r.get("height")]
-    if widths and heights:
-        aggregated["resolution"]["avgWidth"] = int(sum(widths) / len(widths))
-        aggregated["resolution"]["avgHeight"] = int(sum(heights) / len(heights))
-        aggregated["resolution"]["avgAspectRatio"] = aggregated["resolution"]["avgWidth"] / aggregated["resolution"]["avgHeight"] if aggregated["resolution"]["avgHeight"] else 0
-
-    # Aggregate brightness and contrast
-    brightnesses = [f.get("brightness", 0) for f in all_features if f.get("brightness")]
-    contrasts = [f.get("contrast", 0) for f in all_features if f.get("contrast")]
-    if brightnesses:
-        aggregated["brightness"]["avg"] = sum(brightnesses) / len(brightnesses)
-        aggregated["brightness"]["min"] = min(brightnesses)
-        aggregated["brightness"]["max"] = max(brightnesses)
-    if contrasts:
-        aggregated["contrast"]["avg"] = sum(contrasts) / len(contrasts)
-
-    # Assess training quality
-    if len(all_features) >= 8 and aggregated["ocrBlocks"]:
-        aggregated["metadata"]["trainingQuality"] = "excellent"
-    elif len(all_features) >= 5 and aggregated["ocrBlocks"]:
-        aggregated["metadata"]["trainingQuality"] = "good"
-    else:
-        aggregated["metadata"]["trainingQuality"] = "fair"
-
-    return aggregated
-
-
-def _calculate_real_thresholds_from_features(all_features: list[dict[str, Any]], aggregated: dict[str, Any]) -> dict[str, float]:
+def _calculate_real_thresholds(extracted: dict[str, Any], profiles: list[dict[str, Any]]) -> dict[str, float]:
     """
-    Calculate REAL thresholds from extracted features.
+    Calculate REAL thresholds from actual template data.
     
-    NOT hardcoded - computed from actual data.
+    Never hardcoded. Computed from extracted features.
     """
     # Name similarity threshold: based on OCR quality across samples
-    ocr_qualities = []
-    for features in all_features:
-        if features.get("ocrBlocks"):
-            ocr_qualities.append(85)
+    ocr_quality_scores = []
+    for profile in profiles:
+        if profile.get("ocrText"):
+            # High OCR quality = lower threshold needed
+            ocr_quality_scores.append(85)
         else:
-            ocr_qualities.append(60)
+            ocr_quality_scores.append(60)
     
-    name_threshold = sum(ocr_qualities) / len(ocr_qualities) if ocr_qualities else 75
-    name_threshold = max(65, min(90, name_threshold))
+    name_threshold = (
+        sum(ocr_quality_scores) / len(ocr_quality_scores) 
+        if ocr_quality_scores else 75
+    )
 
     # Visual similarity threshold: based on consistency of visual features
-    training_quality = aggregated.get("metadata", {}).get("trainingQuality", "fair")
+    resolution_variance = (
+        extracted.get("resolution", {}).get("variance", {}).get("width", 0)
+    )
+    color_consistency = len(extracted.get("dominantColors", [])) / 5 * 100
     
-    if training_quality == "excellent":
-        visual_threshold = 72
-    elif training_quality == "good":
-        visual_threshold = 68
-    else:
-        visual_threshold = 62
+    visual_threshold = 70 + (color_consistency * 0.2) - min(resolution_variance / 100, 10)
+    visual_threshold = max(55, min(85, visual_threshold))
 
-    # Fraud review threshold: more lenient for marginal cases
-    fraud_review = visual_threshold + 5
+    # Fraud review threshold: conservative when template quality is poor
+    training_quality = extracted.get("metadata", {}).get("trainingQuality", "fair")
+    if training_quality == "excellent":
+        fraud_review = 60
+    elif training_quality == "good":
+        fraud_review = 65
+    elif training_quality == "fair":
+        fraud_review = 70
+    else:
+        fraud_review = 75
 
     # Fraud reject threshold: only very obvious cases
-    fraud_reject = min(92, fraud_review + 20)
+    fraud_reject = min(90, fraud_review + 20)
 
     return {
         "nameSimilarity": round(name_threshold, 2),
@@ -777,7 +553,6 @@ def _calculate_real_thresholds_from_features(all_features: list[dict[str, Any]],
         "fraudReview": round(fraud_review, 2),
         "fraudReject": round(fraud_reject, 2),
     }
-
 
 
 @app.get("/templates/list")

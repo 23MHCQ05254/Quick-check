@@ -29,7 +29,7 @@ export default function UploadCertificatePage() {
     return Math.round(numeric).toString();
   };
 
-  const { data: catalog, loading } = useAsync(async () => (await api.get('/catalog/certifications', { params: { limit: 48 } })).data.items, []);
+  const { data: catalog, loading } = useAsync(async () => (await api.get('/catalog')).data.items, []);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();

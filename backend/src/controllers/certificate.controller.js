@@ -14,16 +14,14 @@ const statusFromAnalysis = (analysis, duplicate) => {
     console.error('[certificates.upload] ERROR: Analysis is null/undefined - AI service may not have returned valid data');
     throw new ApiError(500, 'Certificate analysis failed: AI service returned incomplete data');
   }
-  
+
   if (typeof analysis.fraudProbability === 'undefined' || analysis.fraudProbability === null) {
     console.error('[certificates.upload] ERROR: Analysis missing fraudProbability field:', analysis);
     throw new ApiError(500, 'Certificate analysis failed: Missing fraud probability score');
   }
-  
-  if (duplicate) return 'REJECTED';
-  if (analysis.verificationStatus === 'VERIFIED' || analysis.fraudProbability <= 5) return 'VERIFIED';
-  if (analysis.fraudProbability >= 65) return 'REVIEW_REQUIRED';
-  return 'PENDING';
+
+  if (duplicate || analysis.verificationStatus !== 'VERIFIED') return 'REJECTED';
+  return 'VERIFIED';
 };
 
 export const uploadCertificate = asyncHandler(async (req, res) => {
@@ -50,7 +48,10 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
       studentName: req.user.name,
       certificateId,
       issueDate,
+      userId,
       organizationName: certification.organization.name,
+      organizationId: certification.organization._id.toString(),
+      certificationId: certification._id.toString(),
       templateProfile: template
     });
 
@@ -58,7 +59,9 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
       analysis,
       certificateId,
       organizationId: certification.organization._id,
-      issueDate
+      issueDate,
+      studentId: userId,
+      studentName: req.user.name
     });
 
     const record = await demoStore.addCertificate({
@@ -111,10 +114,12 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
   const exactDup = await checkForExactDuplicate({
     filePath: req.file.path,
     organization: certification.organization._id,
+    certificationId: certification._id,
     studentId: userId,
+    certificateId,
     fileHash
   });
-  
+
   if (exactDup?.isDuplicate) {
     throw new ApiError(400, `This certificate file has already been uploaded. Duplicate ID: ${exactDup.existing._id}`);
   }
@@ -125,7 +130,10 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
     studentName: req.user.name,
     certificateId,
     issueDate,
+    userId,
     organizationName: certification.organization.name,
+    organizationId: certification.organization._id.toString(),
+    certificationId: certification._id.toString(),
     templateProfile: {
       certificationId: certification._id.toString(),
       thresholds: template.thresholds,
@@ -138,10 +146,12 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
   // STEP 3: Check for similar certificates (after analysis)
   const duplicate = await detectDuplicateCertificate({
     analysis,
-    certificateId,
+    uploadedCertificateId: certificateId,
+    certificationId: certification._id,
     organizationId: certification.organization._id,
     issueDate,
-    studentId: userId
+    studentId: userId,
+    studentName: req.user.name
   });
 
   const certificate = await Certificate.create({
@@ -187,15 +197,15 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
     // comprehensive AI analysis mapping
     aiAnalysis: {
       authenticityScore: analysis.authenticityScore || null,
-      fraudProbability: analysis.fraudProbability || analysis.fraudProbability || null,
+      fraudProbability: analysis.fraudProbability ?? null,
       confidenceLevel: analysis.confidence || analysis.confidenceLevel || null,
       matchedRegions: analysis.matchedRegions || null,
       mismatchedRegions: analysis.mismatchedRegions || analysis.mismatches || null,
       missingElements: analysis.missingElements || null,
-      duplicateProbability: analysis.duplicateProbability || (duplicate ? 1 : 0),
+      duplicateProbability: analysis.duplicateProbability ?? (duplicate ? 100 : 0),
       suspiciousAreas: analysis.suspiciousAreas || analysis.suspiciousIndicators || null,
       aiReasoning: analysis.aiReasoning || analysis.explanations || null,
-      verificationStatus: analysis.verificationStatus || (analysis.fraudProbability >= 80 ? 'POSSIBLE_FORGERY' : (analysis.fraudProbability >= 65 ? 'SUSPICIOUS' : 'VERIFIED'))
+      verificationStatus: analysis.verificationStatus || statusFromAnalysis(analysis, duplicate)
     }
   });
 

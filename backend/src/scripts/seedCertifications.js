@@ -2,6 +2,7 @@
 
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import slugify from 'slugify';
 import Organization from '../models/Organization.js';
 import Certification from '../models/Certification.js';
 import { connectDatabase } from '../config/db.js';
@@ -12,20 +13,30 @@ const certifications = [
     {
         organizationName: 'MongoDB',
         certificationName: 'MongoDB Associate Developer',
-        level: 'Associate',
+        category: 'DATABASE',
+        level: 'ASSOCIATE',
         skills: ['Database Design', 'CRUD Operations', 'Indexing', 'Aggregation']
     },
     {
         organizationName: 'GitHub',
         certificationName: 'GitHub Foundations',
-        level: 'Foundations',
+        category: 'DEVELOPER_TOOLS',
+        level: 'FOUNDATIONAL',
         skills: ['Version Control', 'Collaboration', 'CI/CD', 'Git Workflows']
     },
     {
         organizationName: 'Amazon Web Services',
         certificationName: 'AWS Solutions Architect Associate',
-        level: 'Associate',
+        category: 'CLOUD',
+        level: 'ASSOCIATE',
         skills: ['EC2', 'S3', 'RDS', 'IAM', 'VPC', 'CloudFormation']
+    },
+    {
+        organizationName: 'Cisco',
+        certificationName: 'Cisco CCNA',
+        category: 'NETWORKING',
+        level: 'ASSOCIATE',
+        skills: ['Networking Fundamentals', 'Routing', 'Switching', 'Network Security']
     }
 ];
 
@@ -40,31 +51,35 @@ const run = async () => {
     try {
         for (const cert of certifications) {
             // Find or create organization
+            const orgSlug = slugify(cert.organizationName, { lower: true, strict: true });
             const org = await Organization.findOneAndUpdate(
-                { name: cert.organizationName },
+                { slug: orgSlug },
                 {
                     name: cert.organizationName,
-                    slug: cert.organizationName.toLowerCase().replace(/\s+/g, '-'),
+                    slug: orgSlug,
                     active: true
                 },
                 { upsert: true, new: true }
             );
 
             // Find or create certification
+            const certSlug = slugify(cert.certificationName, { lower: true, strict: true });
             const certification = await Certification.findOneAndUpdate(
-                { organization: org._id, name: cert.certificationName },
+                { organization: org._id, slug: certSlug },
                 {
                     organization: org._id,
                     name: cert.certificationName,
-                    slug: cert.certificationName.toLowerCase().replace(/\s+/g, '-'),
+                    slug: certSlug,
+                    category: cert.category,
                     level: cert.level,
                     skills: cert.skills,
-                    active: true
+                    active: true,
+                    templateStatus: 'NOT_TRAINED'
                 },
                 { upsert: true, new: true }
             );
 
-            console.log(`[seedCertifications] ✓ Created/Updated: ${cert.organizationName} - ${cert.certificationName}`);
+            console.log(`[seedCertifications] ✓ Created/Updated: ${cert.organizationName} - ${cert.certificationName} (ID: ${certification._id})`);
         }
 
         console.log('[seedCertifications] Certification seeding complete.');

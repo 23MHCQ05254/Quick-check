@@ -260,7 +260,7 @@ const computeAnalysis = ({ certificateId = '', studentName = '', certificationId
   if ((template?.extractedProfile?.qrRegions || []).length === 0) suspiciousIndicators.push('QR region not present in template');
   if (suspiciousIndicators.length > 0) anomalies.push({ code: 'DEMO_ANALYSIS_FLAGS', severity: suspiciousIndicators.includes('Student name similarity is below threshold') ? 'HIGH' : 'MEDIUM' });
 
-  const recommendation = fraudProbability >= thresholds.fraudReject ? 'REJECT' : fraudProbability >= thresholds.fraudReview ? 'MENTOR_REVIEW' : 'LOW_RISK';
+  const recommendation = confidence >= 95 ? 'ACCEPT' : 'REJECT';
 
   return {
     fraudProbability,
@@ -828,11 +828,12 @@ export const demoStore = {
     const certificate = certificates.find((cert) => cert._id === certificateId || cert.id === certificateId);
     if (!certificate) return null;
     const currentRisk = certificate.analysis?.fraudProbability || 0;
+    const newConfidence = Math.min(96, (certificate.analysis?.confidence || 70) + 3);
     certificate.analysis = {
       ...(certificate.analysis || {}),
       fraudProbability: Math.max(3, Math.min(96, currentRisk + (currentRisk > 60 ? -4 : 2))),
-      confidence: Math.min(96, (certificate.analysis?.confidence || 70) + 3),
-      recommendation: currentRisk > 60 ? 'MENTOR_REVIEW' : 'LOW_RISK'
+      confidence: newConfidence,
+      recommendation: newConfidence >= 95 ? 'ACCEPT' : 'REJECT'
     };
     certificate.moderation = {
       ...(certificate.moderation || {}),

@@ -21,12 +21,12 @@ export default function TemplateIntelligenceDashboard() {
 
     const checkAiHealth = async () => {
         try {
-            const response = await fetch('http://localhost:8000/health');
-            if (response.ok) {
-                setAiStatus({ status: 'ready', message: 'AI service operational' });
+            const response = await api.get('/health');
+            if (response && response.data) {
+                setAiStatus({ status: 'ready', message: 'Backend API operational' });
             }
         } catch (_e) {
-            setAiStatus({ status: 'error', message: 'AI service unavailable' });
+            setAiStatus({ status: 'error', message: 'Backend API unavailable' });
         }
     };
 
