@@ -16,24 +16,45 @@ export default function StudentDashboard() {
   const { user } = useAuth();
   const { data, loading } = useAsync(async () => (await api.get('/certificates/mine')).data.items, []);
   const certificates = data || [];
+  
+  // Real readiness: based only on actual verified certificates
+  // NO fake defaults, NO fake progression
   const readinessData = useMemo(() => {
+    if (certificates.length === 0) {
+      return [
+        { month: 'Jan', score: 0 },
+        { month: 'Feb', score: 0 },
+        { month: 'Mar', score: 0 },
+        { month: 'Apr', score: 0 },
+        { month: 'May', score: 0 }
+      ];
+    }
+    
+    // Group by month
     const buckets = ['Jan', 'Feb', 'Mar', 'Apr', 'May'];
-    return buckets.map((month, index) => {
-      const monthCertificates = certificates.filter((certificate) => {
-        const date = certificate.createdAt || certificate.issueDate;
+    return buckets.map((month) => {
+      const monthCerts = certificates.filter((cert) => {
+        const date = cert.createdAt || cert.issueDate;
         return date ? new Date(date).toLocaleString('en-US', { month: 'short' }) === month : false;
       });
-      const verifiedCount = monthCertificates.filter((certificate) => certificate.status === 'VERIFIED').length;
-      const baseScore = Number(user.placementReadiness || 38);
-      const score = monthCertificates.length ? Math.round((verifiedCount / monthCertificates.length) * 100) : Math.max(0, Math.min(100, baseScore + index * 2));
+      
+      // REAL score: percentage of this month's certs that are verified
+      const verifiedCount = monthCerts.filter((c) => c.status === 'VERIFIED').length;
+      const score = monthCerts.length > 0 ? Math.round((verifiedCount / monthCerts.length) * 100) : 0;
       return { month, score };
     });
-  }, [certificates, user.placementReadiness]);
+  }, [certificates]);
+  
   const verified = certificates.filter((item) => item.status === 'VERIFIED').length;
   const review = certificates.filter((item) => item.status === 'REVIEW_REQUIRED').length;
   const avgFraud = certificates.length
     ? Math.round(certificates.reduce((sum, item) => sum + (item.analysis?.fraudProbability || 0), 0) / certificates.length)
     : 0;
+  
+  // Real readiness: only if explicitly set on user object
+  // Don't show default 38% if not actually calculated
+  const placementReadiness = user.placementReadiness !== undefined && user.placementReadiness !== null ? user.placementReadiness : null;
+  const skillScore = user.skillScore !== undefined && user.skillScore !== null ? user.skillScore : null;
 
   return (
     <div className="space-y-6">
@@ -53,9 +74,23 @@ export default function StudentDashboard() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Certificates" value={certificates.length} detail={`${verified} verified by mentors`} icon={Award} accent="cyan" />
-        <MetricCard label="Fraud Avg" value={`${avgFraud}%`} detail="AI-assisted probability, not a final verdict" icon={ShieldAlert} accent="rose" delay={0.05} />
-        <MetricCard label="Skill Score" value={user.skillScore || 42} detail="Based on verified organizations and skills" icon={BadgeCheck} accent="green" delay={0.1} />
-        <MetricCard label="Readiness" value={`${user.placementReadiness || 38}%`} detail={`${review} item waiting for review`} icon={BriefcaseBusiness} accent="amber" delay={0.15} />
+        <MetricCard label="Fraud Avg" value={avgFraud > 0 ? `${avgFraud}%` : '—'} detail="AI-assisted probability, not a final verdict" icon={ShieldAlert} accent="rose" delay={0.05} />
+        <MetricCard 
+          label="Skill Score" 
+          value={skillScore !== null ? skillScore : '—'} 
+          detail={skillScore !== null ? 'Based on verified organizations and skills' : 'No data yet'} 
+          icon={BadgeCheck} 
+          accent="green" 
+          delay={0.1} 
+        />
+        <MetricCard 
+          label="Readiness" 
+          value={placementReadiness !== null ? `${placementReadiness}%` : '—'} 
+          detail={review > 0 ? `${review} item waiting for review` : 'No pending items'} 
+          icon={BriefcaseBusiness} 
+          accent="amber" 
+          delay={0.15} 
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">

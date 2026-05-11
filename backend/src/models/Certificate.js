@@ -16,6 +16,8 @@ const certificateSchema = new mongoose.Schema(
     fileUrl: String,
     filePath: String,
     originalName: String,
+    fileHash: { type: String, index: true },
+    binaryHash: { type: String, index: true },
     qrData: { type: mongoose.Schema.Types.Mixed },
     ocrText: String,
     textFingerprint: String,

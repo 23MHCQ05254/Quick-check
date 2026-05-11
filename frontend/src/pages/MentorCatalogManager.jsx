@@ -270,7 +270,7 @@ export default function MentorCatalogManager() {
 
           <div className="grid gap-3 md:grid-cols-2">
             {organizations.map((organization) => (
-              <motion.div key={organization._id || organization.id} whileHover={{ y: -2 }} className="rounded-2xl border border-slate-900/10 bg-white/60 p-4 dark:border-white/10 dark:bg-white/[0.05]">
+              <div key={organization._id || organization.id} className="rounded-2xl border border-slate-900/10 bg-white/60 p-4 dark:border-white/10 dark:bg-white/[0.05]">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <div className="grid h-10 w-10 place-items-center rounded-2xl text-white" style={{ background: organization.brandColor || '#38D5FF' }}>
@@ -299,14 +299,10 @@ export default function MentorCatalogManager() {
             <AnimatePresence>
               {!catalog.loading &&
                 catalog.items.map((certification) => (
-                  <motion.div
-                    key={certification._id || certification.id}
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="rounded-2xl border border-slate-900/10 bg-white/68 p-5 shadow-panel dark:border-white/10 dark:bg-white/[0.055]"
-                  >
+                      <div
+                        key={certification._id || certification.id}
+                        className="rounded-2xl border border-slate-900/10 bg-white/68 p-5 shadow-panel dark:border-white/10 dark:bg-white/[0.055]"
+                      >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">

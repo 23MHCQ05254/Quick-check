@@ -29,7 +29,6 @@ try:
 except Exception:
     pytesseract = None
     Image = None
-
 try:
     from pyzbar.pyzbar import decode as decode_qr
 except Exception:

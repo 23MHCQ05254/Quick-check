@@ -4,15 +4,25 @@ import Certification from '../models/Certification.js';
 import TemplateProfile from '../models/TemplateProfile.js';
 import { analyzeCertificateWithAi } from '../services/ai.service.js';
 import { demoStore } from '../services/dataAdapter.js';
-import { detectDuplicateCertificate } from '../services/duplicate.service.js';
+import { detectDuplicateCertificate, checkForExactDuplicate, generateFileHash } from '../services/duplicate.service.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { textFingerprint } from '../utils/text.js';
 
 const statusFromAnalysis = (analysis, duplicate) => {
+  if (!analysis) {
+    console.error('[certificates.upload] ERROR: Analysis is null/undefined - AI service may not have returned valid data');
+    throw new ApiError(500, 'Certificate analysis failed: AI service returned incomplete data');
+  }
+  
+  if (typeof analysis.fraudProbability === 'undefined' || analysis.fraudProbability === null) {
+    console.error('[certificates.upload] ERROR: Analysis missing fraudProbability field:', analysis);
+    throw new ApiError(500, 'Certificate analysis failed: Missing fraud probability score');
+  }
+  
   if (duplicate) return 'REJECTED';
-  if (analysis?.verificationStatus === 'VERIFIED' || (analysis.fraudProbability || 0) <= 5) return 'VERIFIED';
-  if ((analysis.fraudProbability || 0) >= 65) return 'REVIEW_REQUIRED';
+  if (analysis.verificationStatus === 'VERIFIED' || analysis.fraudProbability <= 5) return 'VERIFIED';
+  if (analysis.fraudProbability >= 65) return 'REVIEW_REQUIRED';
   return 'PENDING';
 };
 
@@ -96,6 +106,20 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
   const learnedTemplateProfile = template.learnedProfile || template.extractedProfile || template.extractedTemplateData || {};
   console.log('[certificates.upload] Learned template profile snapshot:', JSON.stringify(learnedTemplateProfile, null, 2));
 
+  // STEP 1: Check for exact duplicate BEFORE AI analysis
+  const fileHash = generateFileHash(req.file.path);
+  const exactDup = await checkForExactDuplicate({
+    filePath: req.file.path,
+    organization: certification.organization._id,
+    studentId: userId,
+    fileHash
+  });
+  
+  if (exactDup?.isDuplicate) {
+    throw new ApiError(400, `This certificate file has already been uploaded. Duplicate ID: ${exactDup.existing._id}`);
+  }
+
+  // STEP 2: Run AI analysis on unique file
   const analysis = await analyzeCertificateWithAi({
     filePath: req.file.path,
     studentName: req.user.name,
@@ -111,11 +135,13 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
     }
   });
 
+  // STEP 3: Check for similar certificates (after analysis)
   const duplicate = await detectDuplicateCertificate({
     analysis,
     certificateId,
     organizationId: certification.organization._id,
-    issueDate
+    issueDate,
+    studentId: userId
   });
 
   const certificate = await Certificate.create({
@@ -133,6 +159,8 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
     fileUrl: `/uploads/${req.file.filename}`,
     filePath: req.file.path,
     originalName: req.file.originalname,
+    fileHash: fileHash,
+    binaryHash: fileHash,
     qrData: analysis.qrData || '',
     ocrText: analysis.ocrText || '',
     textFingerprint: analysis.textFingerprint || textFingerprint(analysis.ocrText || ''),

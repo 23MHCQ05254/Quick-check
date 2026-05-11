@@ -54,7 +54,19 @@ const summarize = (certificates, students = []) => {
 
 const monthKey = (date) => new Date(date || Date.now()).toLocaleString('en-US', { month: 'short' });
 
+const zeroMonthlyTrend = () => ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((month) => ({
+  month,
+  uploads: 0,
+  suspicious: 0,
+  verified: 0,
+  avgRisk: 0
+}));
+
 const trendFromCertificates = (certificates) => {
+  if (!certificates.length) {
+    return zeroMonthlyTrend();
+  }
+
   const seed = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((month) => ({
     month,
     uploads: 0,
@@ -455,19 +467,23 @@ export const deleteCertificate = asyncHandler(async (req, res) => {
 export const analytics = asyncHandler(async (_req, res) => {
   const certificates = await getAllCertificates();
   const students = await getAllStudents();
-
-  res.json({
-    organizationRisk: organizationStats(certificates),
-    uploadTrends: trendFromCertificates(certificates),
-    departmentAnalytics: departmentStats(students, certificates),
-    readinessTrend: [
+  const hasCertificates = certificates.length > 0;
+  const readinessTrend = hasCertificates
+    ? [
       { month: 'Jan', readiness: 48, verified: 8 },
       { month: 'Feb', readiness: 54, verified: 14 },
       { month: 'Mar', readiness: 61, verified: 19 },
       { month: 'Apr', readiness: 68, verified: 28 },
       { month: 'May', readiness: 72, verified: 36 },
       { month: 'Jun', readiness: summarize(certificates, students).avgPlacementReadiness, verified: summarize(certificates, students).VERIFIED }
-    ],
+    ]
+    : zeroMonthlyTrend().map(({ month }) => ({ month, readiness: 0, verified: 0 }));
+
+  res.json({
+    organizationRisk: organizationStats(certificates),
+    uploadTrends: trendFromCertificates(certificates),
+    departmentAnalytics: departmentStats(students, certificates),
+    readinessTrend,
     riskDistribution: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((level) => ({
       level,
       count: certificates.filter((certificate) => riskLevel(certificateRisk(certificate)) === level).length
@@ -490,11 +506,9 @@ export const placementReadiness = asyncHandler(async (_req, res) => {
   const certificates = await getAllCertificates();
   const students = (await getAllStudents()).map((student) => decorateStudent(student, certificates));
   const departments = departmentStats(students, certificates);
-
-  res.json({
-    topStudents: students.sort((a, b) => (b.placementReadiness || 0) - (a.placementReadiness || 0)).slice(0, 10),
-    topDepartments: departments.sort((a, b) => b.avgReadiness - a.avgReadiness),
-    skillReadiness: Object.values(
+  const uniqueSkills = [...new Set(students.flatMap((student) => student.skills || []).filter(Boolean))];
+  const skillReadiness = certificates.length
+    ? Object.values(
       students.flatMap((student) => student.skills || []).reduce((acc, skill) => {
         acc[skill] = acc[skill] || { skill, students: 0, strength: 0 };
         acc[skill].students += 1;
@@ -502,6 +516,12 @@ export const placementReadiness = asyncHandler(async (_req, res) => {
         return acc;
       }, {})
     ).map((item) => ({ ...item, strength: Math.min(100, item.strength) }))
+    : uniqueSkills.map((skill) => ({ skill, students: students.filter((student) => (student.skills || []).includes(skill)).length, strength: 0 }));
+
+  res.json({
+    topStudents: students.sort((a, b) => (b.placementReadiness || 0) - (a.placementReadiness || 0)).slice(0, 10),
+    topDepartments: departments.sort((a, b) => b.avgReadiness - a.avgReadiness),
+    skillReadiness
   });
 });
 

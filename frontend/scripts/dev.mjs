@@ -1,0 +1,91 @@
+import { spawn } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import process from 'node:process';
+
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const children = new Set();
+let backendPort = null;
+let frontendStarted = false;
+
+const log = (label, data) => {
+  const text = data.toString();
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  for (const line of lines) {
+    process.stdout.write(`[${label}] ${line}\n`);
+  }
+};
+
+const stopAll = (code = 0) => {
+  for (const child of children) {
+    if (!child.killed) {
+      child.kill();
+    }
+  }
+
+  process.exit(code);
+};
+
+process.on('SIGINT', () => stopAll(0));
+process.on('SIGTERM', () => stopAll(0));
+
+const spawnChild = (label, args, env = {}) => {
+  const child = spawn(npmCommand, args, {
+    cwd: process.cwd(),
+    env: { ...process.env, ...env },
+    shell: process.platform === 'win32',
+    windowsHide: true
+  });
+
+  children.add(child);
+
+  child.stdout.on('data', (data) => {
+    log(label, data);
+
+    if (label === 'backend' && !frontendStarted) {
+      const match = data.toString().match(/API listening on http:\/\/localhost:(\d+)/);
+      if (match) {
+        backendPort = match[1];
+        startFrontend();
+      }
+    }
+  });
+
+  child.stderr.on('data', (data) => log(label, data));
+
+  child.on('exit', (code, signal) => {
+    children.delete(child);
+
+    if (signal) {
+      stopAll(0);
+      return;
+    }
+
+    if (code && code !== 0) {
+      stopAll(code);
+    }
+  });
+
+  return child;
+};
+
+const startFrontend = () => {
+  if (frontendStarted || !backendPort) {
+    return;
+  }
+
+  frontendStarted = true;
+  const apiUrl = `http://localhost:${backendPort}/api`;
+  const envPath = path.join(process.cwd(), '.env.local');
+  writeFile(envPath, `VITE_API_URL=${apiUrl}\nVITE_API_BASE_URL=${apiUrl}\n`, 'utf8').catch((error) => {
+    log('dev', `Unable to write frontend/.env.local: ${error.message}`);
+  });
+  spawnChild('frontend', ['exec', 'vite', '--', '--host', '0.0.0.0'], {
+    VITE_API_URL: apiUrl,
+    VITE_API_BASE_URL: apiUrl
+  });
+};
+
+spawnChild('backend', ['run', 'dev', '--prefix', '../backend'], {
+  PORT: '0'
+});
