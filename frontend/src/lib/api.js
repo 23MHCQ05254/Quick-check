@@ -6,7 +6,7 @@ export const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_URL || imp
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 15000,
   headers: {
     Accept: 'application/json'
   }

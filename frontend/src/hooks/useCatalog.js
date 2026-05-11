@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useDebouncedValue } from './useDebouncedValue.js';
 
@@ -21,6 +21,8 @@ export function useCatalog(initialFilters = {}) {
   const [facets, setFacets] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const abortControllerRef = useRef(null);
+  const isMountedRef = useRef(true);
   const debouncedSearch = useDebouncedValue(search);
 
   const params = useMemo(
@@ -29,6 +31,16 @@ export function useCatalog(initialFilters = {}) {
   );
 
   const load = useCallback(async () => {
+    // Cancel previous request if still in flight
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    abortControllerRef.current = new AbortController();
+    const currentAbortController = abortControllerRef.current;
+
+    if (!isMountedRef.current) return;
+
     setLoading(true);
     setError('');
     try {
@@ -36,18 +48,40 @@ export function useCatalog(initialFilters = {}) {
         api.get('/catalog/certifications', { params }),
         facets ? Promise.resolve({ data: facets }) : api.get('/catalog/facets')
       ]);
-      setItems(catalogResponse.data.items || []);
-      setPagination(catalogResponse.data.pagination || { page: 1, limit: 12, total: catalogResponse.data.items?.length || 0, pages: 1 });
-      setFacets(facetResponse.data);
+
+      // Only update state if component is still mounted and request wasn't aborted
+      if (isMountedRef.current && !currentAbortController.signal.aborted) {
+        setItems(catalogResponse.data.items || []);
+        setPagination(catalogResponse.data.pagination || { page: 1, limit: 12, total: catalogResponse.data.items?.length || 0, pages: 1 });
+        setFacets(facetResponse.data);
+      }
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Catalog request failed');
+      // Ignore aborted requests
+      if (err.name === 'AbortError') {
+        return;
+      }
+      // Only update state if component is still mounted
+      if (isMountedRef.current && !currentAbortController.signal.aborted) {
+        setError(err.response?.data?.message || err.message || 'Catalog request failed');
+      }
     } finally {
-      setLoading(false);
+      // Only update loading state if component is still mounted
+      if (isMountedRef.current && !currentAbortController.signal.aborted) {
+        setLoading(false);
+      }
     }
   }, [params, facets]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     load();
+
+    return () => {
+      isMountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [load]);
 
   const updateFilter = (key, value) => {

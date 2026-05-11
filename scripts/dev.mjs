@@ -45,7 +45,7 @@ const spawnChild = (label, args, env = {}) => {
             const match = data.toString().match(/API listening on http:\/\/localhost:(\d+)/);
             if (match) {
                 backendPort = match[1];
-                // startFrontend(); // Commented out to avoid double backend startup
+                startFrontend();
             }
         }
     });
@@ -119,4 +119,3 @@ spawnChild('backend', ['run', 'dev', '--prefix', 'backend'], {
     PORT: '8000',
     AI_SERVICE_URL: 'http://localhost:8001'
 });
-// startFrontend(); // Commented out to avoid double backend startup
