@@ -61,7 +61,7 @@ textarea {
 }
 
 .field {
-  @apply w-full rounded-2xl border border-slate-300/40 bg-white/70 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-cyber-cyan/70 focus:ring-4 focus:ring-cyber-cyan/10 dark:border-white/10 dark:bg-white/[0.06] dark:text-white;
+  @apply w-full rounded-2xl border border-slate-300/40 bg-slate-100 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-cyber-cyan/70 focus:ring-4 focus:ring-cyber-cyan/10 dark:border-white/10 dark:bg-slate-800/60 dark:text-white;
 }
 
 .no-scrollbar::-webkit-scrollbar {

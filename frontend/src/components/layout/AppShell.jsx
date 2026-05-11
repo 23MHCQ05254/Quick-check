@@ -66,7 +66,7 @@ function Sidebar({ mobile = false, onClose }) {
   const nav = user.role === 'MENTOR' ? mentorNav : studentNav;
 
   return (
-    <aside className={`${mobile ? 'h-full w-80' : 'hidden w-72 shrink-0 lg:flex'} flex-col border-r border-slate-900/10 bg-white/60 p-5 backdrop-blur-2xl dark:border-white/10 dark:bg-ink/72`}>
+    <aside className={`${mobile ? 'h-full w-80' : 'hidden w-72 shrink-0 lg:flex'} flex-col border-r border-slate-900/10 bg-slate-50/80 p-5 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-900/50`}>
       <div className="flex items-center justify-between">
         <Logo />
         {mobile && (
@@ -76,7 +76,7 @@ function Sidebar({ mobile = false, onClose }) {
         )}
       </div>
 
-      <div className="mt-8 rounded-2xl border border-slate-900/10 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.05]">
+      <div className="mt-8 rounded-2xl border border-slate-900/10 bg-slate-200/40 p-3 dark:border-white/10 dark:bg-slate-800/50">
         <p className="text-xs font-semibold uppercase tracking-normal text-slate-500 dark:text-slate-400">Signed in</p>
         <p className="mt-2 truncate text-sm font-bold text-slate-950 dark:text-white">{user.name}</p>
         <p className="truncate text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
