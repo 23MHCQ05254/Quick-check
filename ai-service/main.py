@@ -903,6 +903,15 @@ async def analyze(
             "visualComponents": visual.get("components", {}),
             "matchedNameText": name_match.get("matchedText", ""),
             "qrData": profile.get("qrData", ""),
+            "qrVerification": {
+                "present": bool(profile.get("qrData")),
+                "url": profile.get("qrData", "") if isinstance(profile.get("qrData", ""), str) and profile.get("qrData", "").lower().startswith(("http://", "https://")) else "",
+                "verified": bool(profile.get("qrData")) and (
+                    not isinstance(profile.get("qrData", ""), str)
+                    or not profile.get("qrData", "").lower().startswith(("http://", "https://"))
+                    or bool(organization and organization.lower().split()[0] in profile.get("qrData", "").lower())
+                ),
+            },
             "ocrText": profile.get("ocrText", ""),
             "imageHash": profile.get("imageHash", binary_hash(path) if path and path.exists() else ""),
             "textFingerprint": text_fingerprint,

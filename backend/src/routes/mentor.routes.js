@@ -6,6 +6,7 @@ import {
   dashboard,
   deleteCertificate,
   exportStudents,
+  institutionalReport,
   listCertificates,
   listReviewQueue,
   listStudents,
@@ -25,6 +26,7 @@ router.get('/dashboard', dashboard);
 router.get('/students', listStudents);
 router.get('/students/export', exportStudents);
 router.get('/analytics', analytics);
+router.get('/reports/institutional', institutionalReport);
 router.get('/placement', placementReadiness);
 router.get('/review-queue', listReviewQueue);
 router.get('/certificates', listCertificates);

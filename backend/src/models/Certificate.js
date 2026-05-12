@@ -22,6 +22,14 @@ const certificateSchema = new mongoose.Schema(
     ocrText: String,
     textFingerprint: String,
     imageHash: { type: String, index: true },
+    verificationArtifacts: {
+      qrVerified: { type: Boolean, default: false },
+      qrVerificationUrl: String,
+      blockchainAnchorHash: { type: String, index: true },
+      blockchainNetwork: String,
+      blockchainStatus: { type: String, enum: ['NOT_CONFIGURED', 'PENDING', 'ANCHORED', 'FAILED'], default: 'NOT_CONFIGURED' },
+      auditLogId: { type: mongoose.Schema.Types.ObjectId, ref: 'ActivityLog' }
+    },
     // New detailed extracted certificate data captured from AI pipeline
     extractedCertificateData: { type: mongoose.Schema.Types.Mixed, default: {} },
     status: {
@@ -55,5 +63,8 @@ const certificateSchema = new mongoose.Schema(
 certificateSchema.index({ organization: 1, certificateId: 1 });
 certificateSchema.index({ organization: 1, issueDate: 1 });
 certificateSchema.index({ status: 1, locked: 1, createdAt: -1 });
+certificateSchema.index({ certification: 1, status: 1, createdAt: -1 });
+certificateSchema.index({ student: 1, status: 1, createdAt: -1 });
+certificateSchema.index({ 'analysis.fraudProbability': 1, createdAt: -1 });
 
 export default mongoose.model('Certificate', certificateSchema);

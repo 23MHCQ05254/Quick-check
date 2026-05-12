@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { AlertTriangle, BadgeCheck, Bell, BrainCircuit, ClipboardCheck, FileWarning, RadioTower, ShieldCheck, UsersRound } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, Bell, BrainCircuit, ClipboardCheck, Download, FileWarning, RadioTower, ShieldCheck, UsersRound } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Button } from '../components/common/Button.jsx';
 import { GlassPanel } from '../components/common/GlassPanel.jsx';
@@ -48,13 +48,22 @@ export default function MentorDashboard() {
     reload();
   };
 
+  const downloadReport = async () => {
+    const response = await api.get('/mentor/reports/institutional', { params: { format: 'csv' }, responseType: 'blob' });
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'quickcheck-institutional-report.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const summary = data?.summary || {};
   const reviewQueue = data?.reviewQueue || [];
   const riskLeaders = data?.riskLeaders || [];
-  const riskDistribution = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((level) => ({
-    level,
-    count: riskLeaders.filter((item) => item.riskLevel === level).length || (level === 'LOW' ? Math.max(0, (summary.total || 0) - (summary.suspicious || 0)) : level === 'HIGH' ? summary.suspicious || 0 : 0)
-  }));
+  const riskDistribution = data?.riskDistribution || ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((level) => ({ level, count: 0 }));
 
   return (
     <div className="space-y-6">
@@ -74,6 +83,10 @@ export default function MentorDashboard() {
           <Button as={Link} to="/mentor/analytics" variant="secondary">
             <BrainCircuit size={16} />
             Analytics
+          </Button>
+          <Button variant="secondary" onClick={downloadReport}>
+            <Download size={16} />
+            Report
           </Button>
         </div>
       </div>

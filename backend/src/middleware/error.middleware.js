@@ -21,6 +21,12 @@ export const errorHandler = (error, _req, res, _next) => {
     message = `Invalid ${error.path}: ${error.value}`;
   }
 
+  if (error.name === 'MulterError') {
+    statusCode = 400;
+    message = error.code === 'LIMIT_FILE_SIZE' ? 'Uploaded file is too large' : 'Upload failed';
+    details = error.message;
+  }
+
   // Handle common axios errors from downstream services
   if (error.isAxiosError) {
     statusCode = 502;
@@ -40,4 +46,3 @@ export const errorHandler = (error, _req, res, _next) => {
     stack: process.env.NODE_ENV === 'production' ? undefined : error.stack
   });
 };
-

@@ -36,6 +36,20 @@ export default function UploadCertificatePage() {
     return (catalog || []).filter((item) => `${item.name} ${item.organization?.name}`.toLowerCase().includes(q));
   }, [catalog, query]);
 
+  const selectedMismatchWarning = useMemo(() => {
+    if (!file || !selectedCertification) return '';
+    const filename = file.name.toLowerCase();
+    const certName = (selectedCertification.name || '').toLowerCase();
+    const orgName = (selectedCertification.organization?.name || '').toLowerCase();
+    const certTokens = certName.split(/[^a-z0-9]+/).filter((token) => token.length > 3);
+    const orgTokens = orgName.split(/[^a-z0-9]+/).filter((token) => token.length > 2);
+    const hasCertHint = certTokens.some((token) => filename.includes(token));
+    const hasOrgHint = orgTokens.some((token) => filename.includes(token));
+    return hasCertHint || hasOrgHint
+      ? ''
+      : 'The file name does not look like the selected certification. Verify the selected template before running AI analysis.';
+  }, [file, selectedCertification]);
+
   const submit = async (event) => {
     event.preventDefault();
     if (!selectedCertification || !file) return;
@@ -141,6 +155,12 @@ export default function UploadCertificatePage() {
               <span className="mt-1 text-xs text-slate-500 dark:text-slate-400">PNG, JPG, or PDF up to 10 MB</span>
               <input className="hidden" type="file" accept="image/png,image/jpeg,application/pdf" onChange={(event) => setFile(event.target.files?.[0] || null)} />
             </label>
+
+            {selectedMismatchWarning && (
+              <p className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                {selectedMismatchWarning}
+              </p>
+            )}
 
             {error && <p className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-600 dark:text-rose-300">{error}</p>}
 

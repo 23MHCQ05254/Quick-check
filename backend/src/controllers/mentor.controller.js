@@ -52,13 +52,31 @@ const summarize = (certificates, students = []) => {
   return totals;
 };
 
-const monthKey = (date) => new Date(date || Date.now()).toLocaleString('en-US', { month: 'short' });
+const monthKey = (date) => {
+  const value = new Date(date || Date.now());
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
+};
 
-const zeroMonthlyTrend = () => ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((month) => ({
-  month,
+const monthLabel = (key) => {
+  const [year, month] = key.split('-').map(Number);
+  return new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'short', year: '2-digit' });
+};
+
+const recentMonthKeys = (count = 6) => {
+  const now = new Date();
+  return Array.from({ length: count }).map((_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (count - 1 - index), 1);
+    return monthKey(date);
+  });
+};
+
+const zeroMonthlyTrend = () => recentMonthKeys().map((key) => ({
+  key,
+  month: monthLabel(key),
   uploads: 0,
   suspicious: 0,
   verified: 0,
+  rejected: 0,
   avgRisk: 0
 }));
 
@@ -67,20 +85,23 @@ const trendFromCertificates = (certificates) => {
     return zeroMonthlyTrend();
   }
 
-  const seed = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((month) => ({
-    month,
+  const seed = recentMonthKeys().map((key) => ({
+    key,
+    month: monthLabel(key),
     uploads: 0,
     suspicious: 0,
     verified: 0,
+    rejected: 0,
     avgRisk: 0,
     riskTotal: 0
   }));
-  const map = new Map(seed.map((item) => [item.month, item]));
+  const map = new Map(seed.map((item) => [item.key, item]));
 
   certificates.forEach((certificate) => {
     const bucket = map.get(monthKey(certificate.createdAt)) || seed[seed.length - 1];
     bucket.uploads += 1;
     bucket.verified += certificate.status === 'VERIFIED' ? 1 : 0;
+    bucket.rejected += certificate.status === 'REJECTED' ? 1 : 0;
     bucket.suspicious += certificate.status === 'REVIEW_REQUIRED' || certificateRisk(certificate) >= 65 ? 1 : 0;
     bucket.riskTotal += certificateRisk(certificate);
     bucket.avgRisk = Math.round(bucket.riskTotal / Math.max(1, bucket.uploads));
@@ -88,6 +109,16 @@ const trendFromCertificates = (certificates) => {
 
   return seed.map(({ riskTotal, ...item }) => item);
 };
+
+const statusDistribution = (certificates) => ['VERIFIED', 'REJECTED', 'PENDING', 'REVIEW_REQUIRED'].map((status) => ({
+  status,
+  count: certificates.filter((certificate) => certificate.status === status).length
+}));
+
+const riskDistribution = (certificates) => ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((level) => ({
+  level,
+  count: certificates.filter((certificate) => riskLevel(certificateRisk(certificate)) === level).length
+}));
 
 const organizationStats = (certificates) => {
   const byOrganization = certificates.reduce((acc, cert) => {
@@ -193,64 +224,27 @@ const getAllStudents = async () =>
     ? demoStore._inMemory.users.filter((user) => user.role === 'STUDENT').map((user) => ({ ...user, password: undefined }))
     : User.find({ role: 'STUDENT' }).sort({ createdAt: -1 });
 
-export const dashboard = asyncHandler(async (_req, res) => {
+const buildStudentDataset = async () => {
   const certificates = await getAllCertificates();
-  const students = await getAllStudents();
-  const templates = isDemoMode() ? (await demoStore.listTemplates()).filter((template) => template.status === 'ACTIVE') : await TemplateProfile.find({ status: 'ACTIVE' });
+  const students = (await getAllStudents()).map((student) => decorateStudent(student, certificates));
+  return { certificates, students };
+};
 
-  res.json({
-    summary: { ...summarize(certificates, students), activeTemplates: templates.length },
-    suspicious: certificates.filter((cert) => cert.status === 'REVIEW_REQUIRED' || certificateRisk(cert) >= 65).slice(0, 8),
-    recent: certificates.slice(0, 8),
-    trends: trendFromCertificates(certificates),
-    organizationStats: organizationStats(certificates),
-    departmentStats: departmentStats(students, certificates),
-    notifications: buildNotifications(certificates),
-    activity: isDemoMode() ? await demoStore.listActivities({ limit: 8 }) : await ActivityLog.find().populate('actor').sort({ createdAt: -1 }).limit(8)
-  });
-});
+const filterAndSortStudents = (students, queryParams = {}) => {
+  let filtered = [...students];
+  const search = (queryParams.search || '').toString().toLowerCase();
+  const department = (queryParams.department || queryParams.branch || '').toString();
+  const year = Number(queryParams.year) || null;
+  const risk = (queryParams.risk || '').toString();
+  const readiness = (queryParams.readiness || '').toString();
+  const certification = (queryParams.certification || '').toString().toLowerCase();
+  const dateFrom = queryParams.dateFrom ? new Date(queryParams.dateFrom) : null;
+  const dateTo = queryParams.dateTo ? new Date(queryParams.dateTo) : null;
+  const minCerts = queryParams.minCerts !== undefined && queryParams.minCerts !== '' ? Number(queryParams.minCerts) : null;
+  const maxCerts = queryParams.maxCerts !== undefined && queryParams.maxCerts !== '' ? Number(queryParams.maxCerts) : null;
+  const sort = (queryParams.sort || 'readiness').toString();
 
-export const commandCenter = asyncHandler(async (_req, res) => {
-  const certificates = await getAllCertificates();
-  const students = await getAllStudents();
-  const templates = isDemoMode() ? (await demoStore.listTemplates()).filter((template) => template.status === 'ACTIVE') : await TemplateProfile.find({ status: 'ACTIVE' });
-  const organizations = isDemoMode() ? await demoStore.listOrganizations(true) : await Organization.find({ active: true });
-  const certifications = isDemoMode() ? (await demoStore.listCatalog({ limit: 48 })).items : await Certification.find({ active: true }).populate('organization').limit(80);
-  const decoratedStudents = students.map((student) => decorateStudent(student, certificates));
-
-  res.json({
-    summary: { ...summarize(certificates, students), activeTemplates: templates.length, organizations: organizations.length, certifications: certifications.length },
-    fraudTrends: trendFromCertificates(certificates),
-    organizationStats: organizationStats(certificates),
-    departmentStats: departmentStats(students, certificates),
-    readinessLeaders: decoratedStudents.sort((left, right) => (right.placementReadiness || 0) - (left.placementReadiness || 0)).slice(0, 6),
-    riskLeaders: certificates
-      .map((certificate) => ({ ...certificate, riskLevel: riskLevel(certificateRisk(certificate)) }))
-      .sort((left, right) => certificateRisk(right) - certificateRisk(left))
-      .slice(0, 8),
-    reviewQueue: certificates.filter((cert) => cert.status === 'REVIEW_REQUIRED' || certificateRisk(cert) >= 65).slice(0, 8),
-    notifications: buildNotifications(certificates),
-    activity: isDemoMode() ? await demoStore.listActivities({ limit: 12 }) : await ActivityLog.find().populate('actor').sort({ createdAt: -1 }).limit(12)
-  });
-});
-
-export const listStudents = asyncHandler(async (req, res) => {
-  const certificates = await getAllCertificates();
-  let students = (await getAllStudents()).map((student) => decorateStudent(student, certificates));
-
-  const search = (req.query.search || '').toString().toLowerCase();
-  const department = (req.query.department || req.query.branch || '').toString();
-  const year = Number(req.query.year) || null;
-  const risk = (req.query.risk || '').toString();
-  const readiness = (req.query.readiness || '').toString();
-  const certification = (req.query.certification || '').toString().toLowerCase();
-  const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom) : null;
-  const dateTo = req.query.dateTo ? new Date(req.query.dateTo) : null;
-  const minCerts = req.query.minCerts !== undefined && req.query.minCerts !== '' ? Number(req.query.minCerts) : null;
-  const maxCerts = req.query.maxCerts !== undefined && req.query.maxCerts !== '' ? Number(req.query.maxCerts) : null;
-  const sort = (req.query.sort || 'readiness').toString();
-
-  students = students.filter((student) => {
+  filtered = filtered.filter((student) => {
     const haystack = `${student.name} ${student.email} ${student.department} ${student.branch || ''} ${(student.skills || []).join(' ')} ${(student.certificationNames || []).join(' ')}`.toLowerCase();
     if (search && !haystack.includes(search)) return false;
     if (department && student.department !== department) return false;
@@ -290,7 +284,56 @@ export const listStudents = asyncHandler(async (req, res) => {
     certificates: (a, b) => (b.certificates || 0) - (a.certificates || 0),
     name: (a, b) => a.name.localeCompare(b.name)
   };
-  students.sort(sorters[sort] || sorters.readiness);
+  filtered.sort(sorters[sort] || sorters.readiness);
+  return filtered;
+};
+
+export const dashboard = asyncHandler(async (_req, res) => {
+  const certificates = await getAllCertificates();
+  const students = await getAllStudents();
+  const templates = isDemoMode() ? (await demoStore.listTemplates()).filter((template) => template.status === 'ACTIVE') : await TemplateProfile.find({ status: 'ACTIVE' });
+
+  res.json({
+    summary: { ...summarize(certificates, students), activeTemplates: templates.length },
+    suspicious: certificates.filter((cert) => cert.status === 'REVIEW_REQUIRED' || certificateRisk(cert) >= 65).slice(0, 8),
+    recent: certificates.slice(0, 8),
+    trends: trendFromCertificates(certificates),
+    organizationStats: organizationStats(certificates),
+    departmentStats: departmentStats(students, certificates),
+    notifications: buildNotifications(certificates),
+    activity: isDemoMode() ? await demoStore.listActivities({ limit: 8 }) : await ActivityLog.find().populate('actor').sort({ createdAt: -1 }).limit(8)
+  });
+});
+
+export const commandCenter = asyncHandler(async (_req, res) => {
+  const certificates = await getAllCertificates();
+  const students = await getAllStudents();
+  const templates = isDemoMode() ? (await demoStore.listTemplates()).filter((template) => template.status === 'ACTIVE') : await TemplateProfile.find({ status: 'ACTIVE' });
+  const organizations = isDemoMode() ? await demoStore.listOrganizations(true) : await Organization.find({ active: true });
+  const certifications = isDemoMode() ? (await demoStore.listCatalog({ limit: 48 })).items : await Certification.find({ active: true }).populate('organization').limit(80);
+  const decoratedStudents = students.map((student) => decorateStudent(student, certificates));
+
+  res.json({
+    summary: { ...summarize(certificates, students), activeTemplates: templates.length, organizations: organizations.length, certifications: certifications.length },
+    fraudTrends: trendFromCertificates(certificates),
+    riskDistribution: riskDistribution(certificates),
+    statusDistribution: statusDistribution(certificates),
+    organizationStats: organizationStats(certificates),
+    departmentStats: departmentStats(students, certificates),
+    readinessLeaders: decoratedStudents.sort((left, right) => (right.placementReadiness || 0) - (left.placementReadiness || 0)).slice(0, 6),
+    riskLeaders: certificates
+      .map((certificate) => ({ ...certificate, riskLevel: riskLevel(certificateRisk(certificate)) }))
+      .sort((left, right) => certificateRisk(right) - certificateRisk(left))
+      .slice(0, 8),
+    reviewQueue: certificates.filter((cert) => cert.status === 'REVIEW_REQUIRED' || certificateRisk(cert) >= 65).slice(0, 8),
+    notifications: buildNotifications(certificates),
+    activity: isDemoMode() ? await demoStore.listActivities({ limit: 12 }) : await ActivityLog.find().populate('actor').sort({ createdAt: -1 }).limit(12)
+  });
+});
+
+export const listStudents = asyncHandler(async (req, res) => {
+  const { students: allStudents } = await buildStudentDataset();
+  const students = filterAndSortStudents(allStudents, req.query);
 
   res.json({
     items: students.map(({ certificateRows, ...student }) => student),
@@ -308,19 +351,8 @@ const csvEscape = (value) => {
 };
 
 export const exportStudents = asyncHandler(async (req, res) => {
-  const certificates = await getAllCertificates();
-  let students = (await getAllStudents()).map((student) => decorateStudent(student, certificates));
-  req.query = { ...req.query };
-
-  const fakeRes = {
-    payload: null,
-    json(payload) {
-      this.payload = payload;
-    }
-  };
-  await listStudents({ ...req, query: req.query }, fakeRes);
-  const allowedIds = new Set((fakeRes.payload?.items || []).map((student) => (student._id || student.id)?.toString()));
-  students = students.filter((student) => allowedIds.has((student._id || student.id)?.toString()));
+  const { students: allStudents } = await buildStudentDataset();
+  const students = filterAndSortStudents(allStudents, req.query);
 
   const rows = students.flatMap((student) => {
     const certRows = student.certificateRows?.length ? student.certificateRows : [null];
@@ -567,7 +599,7 @@ export const analytics = asyncHandler(async (_req, res) => {
   const certificates = await getAllCertificates();
   const students = (await getAllStudents()).map((student) => decorateStudent(student, certificates));
   const readinessTrend = trendFromCertificates(certificates).map((bucket) => {
-    const monthCertificates = certificates.filter((certificate) => monthKey(certificate.createdAt) === bucket.month);
+    const monthCertificates = certificates.filter((certificate) => monthKey(certificate.createdAt) === bucket.key);
     const verified = monthCertificates.filter((certificate) => certificate.status === 'VERIFIED').length;
     return {
       month: bucket.month,
@@ -581,10 +613,8 @@ export const analytics = asyncHandler(async (_req, res) => {
     uploadTrends: trendFromCertificates(certificates),
     departmentAnalytics: departmentStats(students, certificates),
     readinessTrend,
-    riskDistribution: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((level) => ({
-      level,
-      count: certificates.filter((certificate) => riskLevel(certificateRisk(certificate)) === level).length
-    })),
+    riskDistribution: riskDistribution(certificates),
+    statusDistribution: statusDistribution(certificates),
     topCertifications: Object.values(
       certificates.reduce((acc, certificate) => {
         acc[certificate.title] = acc[certificate.title] || { name: certificate.title, uploads: 0, avgRisk: 0 };
@@ -606,13 +636,15 @@ export const placementReadiness = asyncHandler(async (_req, res) => {
   const uniqueSkills = [...new Set(students.flatMap((student) => student.skills || []).filter(Boolean))];
   const skillReadiness = certificates.length
     ? Object.values(
-      students.flatMap((student) => student.skills || []).reduce((acc, skill) => {
+      students.reduce((acc, student) => {
+        (student.skills || []).forEach((skill) => {
         acc[skill] = acc[skill] || { skill, students: 0, strength: 0 };
         acc[skill].students += 1;
-        acc[skill].strength += 12;
+          acc[skill].strength += student.placementReadiness || 0;
+        });
         return acc;
       }, {})
-    ).map((item) => ({ ...item, strength: Math.min(100, item.strength) }))
+    ).map((item) => ({ ...item, strength: item.students ? Math.round(item.strength / item.students) : 0 }))
     : uniqueSkills.map((skill) => ({ skill, students: students.filter((student) => (student.skills || []).includes(skill)).length, strength: 0 }));
 
   res.json({
@@ -620,6 +652,73 @@ export const placementReadiness = asyncHandler(async (_req, res) => {
     topDepartments: departments.sort((a, b) => b.avgReadiness - a.avgReadiness),
     skillReadiness
   });
+});
+
+export const institutionalReport = asyncHandler(async (req, res) => {
+  const certificates = await getAllCertificates();
+  const students = (await getAllStudents()).map((student) => decorateStudent(student, certificates));
+  const templates = isDemoMode() ? (await demoStore.listTemplates()).filter((template) => template.status === 'ACTIVE') : await TemplateProfile.find({ status: 'ACTIVE' }).populate(['certification', 'organization']);
+  const summary = summarize(certificates, students);
+  const report = {
+    generatedAt: new Date().toISOString(),
+    scope: 'institution',
+    summary: {
+      ...summary,
+      activeTemplates: templates.length,
+      verificationRate: summary.total ? Math.round((summary.VERIFIED / summary.total) * 100) : 0,
+      rejectionRate: summary.total ? Math.round((summary.REJECTED / summary.total) * 100) : 0
+    },
+    trends: trendFromCertificates(certificates),
+    riskDistribution: riskDistribution(certificates),
+    statusDistribution: statusDistribution(certificates),
+    departmentAnalytics: departmentStats(students, certificates),
+    organizationAnalytics: organizationStats(certificates),
+    topCertifications: Object.values(
+      certificates.reduce((acc, certificate) => {
+        const key = certificate.certification?._id?.toString?.() || certificate.title;
+        acc[key] = acc[key] || {
+          name: certificate.certification?.name || certificate.title,
+          issuer: certificate.organization?.name || '',
+          uploads: 0,
+          verified: 0,
+          rejected: 0,
+          avgRisk: 0
+        };
+        acc[key].uploads += 1;
+        acc[key].verified += certificate.status === 'VERIFIED' ? 1 : 0;
+        acc[key].rejected += certificate.status === 'REJECTED' ? 1 : 0;
+        acc[key].avgRisk += certificateRisk(certificate);
+        return acc;
+      }, {})
+    ).map((item) => ({ ...item, avgRisk: item.uploads ? Math.round(item.avgRisk / item.uploads) : 0 })),
+    explainability: {
+      decisionSignals: ['template_text_similarity', 'visual_similarity', 'structure_similarity', 'qr_similarity', 'duplicate_probability'],
+      finalVerdict: 'AI confidence >= threshold verifies; significant mismatch rejects; duplicate checks use verified certificates only',
+      futureReadySignals: ['qr_verification', 'blockchain_anchor_hash', 'audit_log_id']
+    }
+  };
+
+  const format = (req.query.format || 'json').toString().toLowerCase();
+  if (format === 'csv') {
+    const rows = [
+      ['metric', 'value'],
+      ['generatedAt', report.generatedAt],
+      ['students', report.summary.students],
+      ['uploads', report.summary.total],
+      ['verified', report.summary.VERIFIED],
+      ['rejected', report.summary.REJECTED],
+      ['avgFraud', report.summary.avgFraud],
+      ['avgConfidence', report.summary.avgConfidence],
+      ['verificationRate', report.summary.verificationRate],
+      ['activeTemplates', report.summary.activeTemplates]
+    ];
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="quickcheck-institutional-report.csv"');
+    res.send(rows.map((row) => row.map(csvEscape).join(',')).join('\n'));
+    return;
+  }
+
+  res.json(report);
 });
 
 export const activityLogs = asyncHandler(async (req, res) => {

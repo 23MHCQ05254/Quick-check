@@ -20,7 +20,13 @@ const storage = multer.diskStorage({
 
 const fileFilter = (_req, file, cb) => {
   const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'];
-  cb(null, allowed.includes(file.mimetype));
+  const allowedExtensions = ['.png', '.jpg', '.jpeg', '.pdf'];
+  const extension = path.extname(file.originalname || '').toLowerCase();
+  if (!allowed.includes(file.mimetype) || !allowedExtensions.includes(extension)) {
+    cb(new Error('Unsupported upload type. Use PNG, JPG, JPEG, or PDF.'));
+    return;
+  }
+  cb(null, true);
 };
 
 export const upload = multer({
@@ -28,4 +34,3 @@ export const upload = multer({
   fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 }
 });
-

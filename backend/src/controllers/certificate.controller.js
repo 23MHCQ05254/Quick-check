@@ -235,6 +235,13 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
       securityMarkers: analysis.securityMarkers || null,
       visualFingerprint: analysis.visualFingerprint || null
     },
+    verificationArtifacts: {
+      qrVerified: Boolean(analysis.qrData && analysis.qrVerification?.verified),
+      qrVerificationUrl: analysis.qrVerification?.url || (typeof analysis.qrData === 'string' && /^https?:\/\//i.test(analysis.qrData) ? analysis.qrData : ''),
+      blockchainAnchorHash: fileHash,
+      blockchainNetwork: process.env.BLOCKCHAIN_NETWORK || '',
+      blockchainStatus: process.env.BLOCKCHAIN_ANCHORING_ENABLED === 'true' ? 'PENDING' : 'NOT_CONFIGURED'
+    },
     // comprehensive AI analysis mapping
     aiAnalysis: {
       authenticityScore: analysis.authenticityScore || null,
