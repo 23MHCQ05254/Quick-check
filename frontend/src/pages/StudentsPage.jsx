@@ -1,7 +1,8 @@
-import { ExternalLink, Filter, GraduationCap, Search, ShieldCheck } from 'lucide-react';
+import { Download, ExternalLink, Filter, GraduationCap, Search, ShieldCheck } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { GlassPanel } from '../components/common/GlassPanel.jsx';
 import { Skeleton } from '../components/common/Skeleton.jsx';
 import { RiskPill } from '../components/mentor/RiskPill.jsx';
@@ -9,13 +10,40 @@ import { useAsync } from '../hooks/useAsync.js';
 import { api } from '../lib/api.js';
 
 export default function StudentsPage() {
-  const [filters, setFilters] = useState({ search: '', department: '', year: '', risk: '', readiness: '', sort: 'readiness' });
+  const [searchParams] = useSearchParams();
+  const [filters, setFilters] = useState({
+    search: searchParams.get('search') || '',
+    department: '',
+    year: '',
+    certification: '',
+    risk: '',
+    readiness: '',
+    dateFrom: '',
+    dateTo: '',
+    minCerts: '',
+    maxCerts: '',
+    sort: 'readiness'
+  });
   const debouncedSearch = useDebouncedValue(filters.search);
   const params = useMemo(() => ({ ...filters, search: debouncedSearch }), [filters, debouncedSearch]);
   const { data, loading } = useAsync(async () => (await api.get('/mentor/students', { params })).data, [params]);
   const students = data?.items || [];
 
   const update = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  const exportStudents = async (format) => {
+    const response = await api.get('/mentor/students/export', {
+      params: { ...params, format },
+      responseType: 'blob'
+    });
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `quickcheck-filtered-students.${format === 'xlsx' ? 'xls' : 'csv'}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -33,7 +61,7 @@ export default function StudentsPage() {
         <div className="grid gap-3 lg:grid-cols-[1fr_repeat(4,180px)]">
           <div className="flex min-h-12 items-center gap-3 rounded-2xl border border-slate-900/10 bg-white/70 px-4 dark:border-white/10 dark:bg-white/[0.06]">
             <Search size={17} className="text-cyber-cyan" />
-            <input className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400" placeholder="Search students, skills, departments" value={filters.search} onChange={(event) => update('search', event.target.value)} />
+            <input className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400" placeholder="Search name, email, branch, certification" value={filters.search} onChange={(event) => update('search', event.target.value)} />
           </div>
           <select className="field" value={filters.risk} onChange={(event) => update('risk', event.target.value)}>
             <option value="">All risk</option>
@@ -44,12 +72,15 @@ export default function StudentsPage() {
           <select className="field" value={filters.readiness} onChange={(event) => update('readiness', event.target.value)}>
             <option value="">All readiness</option>
             <option value="ready">Placement ready</option>
+            <option value="moderate">Moderate</option>
             <option value="needs-focus">Needs focus</option>
           </select>
           <select className="field" value={filters.sort} onChange={(event) => update('sort', event.target.value)}>
-            <option value="readiness">Sort readiness</option>
-            <option value="risk">Sort risk</option>
-            <option value="certificates">Sort uploads</option>
+            <option value="readiness">Highest readiness</option>
+            <option value="trust">Highest trust</option>
+            <option value="verified">Most verified</option>
+            <option value="recent">Recent uploads</option>
+            <option value="fraud">Fraud %</option>
             <option value="name">Sort name</option>
           </select>
           <div className="flex items-center gap-2 rounded-2xl bg-slate-900/5 px-4 text-sm font-bold text-slate-500 dark:bg-white/10 dark:text-slate-300">
@@ -57,10 +88,36 @@ export default function StudentsPage() {
             {students.length} students
           </div>
         </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <input className="field" placeholder="Branch" value={filters.department} onChange={(event) => update('department', event.target.value)} />
+          <input className="field" placeholder="Year" inputMode="numeric" value={filters.year} onChange={(event) => update('year', event.target.value)} />
+          <input className="field" placeholder="Certification" value={filters.certification} onChange={(event) => update('certification', event.target.value)} />
+          <input className="field" type="date" value={filters.dateFrom} onChange={(event) => update('dateFrom', event.target.value)} />
+          <input className="field" type="date" value={filters.dateTo} onChange={(event) => update('dateTo', event.target.value)} />
+          <div className="grid grid-cols-2 gap-2">
+            <input className="field" placeholder="Min certs" inputMode="numeric" value={filters.minCerts} onChange={(event) => update('minCerts', event.target.value)} />
+            <input className="field" placeholder="Max certs" inputMode="numeric" value={filters.maxCerts} onChange={(event) => update('maxCerts', event.target.value)} />
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button className="focus-ring inline-flex items-center gap-2 rounded-2xl bg-cyan-500/12 px-4 py-2 text-sm font-black text-cyan-700 ring-1 ring-cyan-500/20 dark:text-cyan-200" type="button" onClick={() => exportStudents('csv')}>
+            <Download size={16} />
+            CSV
+          </button>
+          <button className="focus-ring inline-flex items-center gap-2 rounded-2xl bg-emerald-500/12 px-4 py-2 text-sm font-black text-emerald-700 ring-1 ring-emerald-500/20 dark:text-emerald-200" type="button" onClick={() => exportStudents('xlsx')}>
+            <Download size={16} />
+            XLSX
+          </button>
+        </div>
       </GlassPanel>
 
       <div className="grid gap-4">
         {loading && Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-36" />)}
+        {!loading && students.length === 0 && (
+          <GlassPanel className="p-8 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">
+            No students match the current filters.
+          </GlassPanel>
+        )}
         {!loading &&
           students.map((student) => {
             const riskLevel = student.fraudScore >= 65 ? 'HIGH' : student.fraudScore >= 35 ? 'MEDIUM' : 'LOW';

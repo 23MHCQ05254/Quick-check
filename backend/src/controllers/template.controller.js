@@ -5,7 +5,6 @@ import Organization from '../models/Organization.js';
 import TemplateProfile from '../models/TemplateProfile.js';
 import { demoStore } from '../services/dataAdapter.js';
 import { extractTemplateProfileWithAi } from '../services/ai.service.js';
-import { generateFallbackTemplate } from '../services/fallbackTemplate.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -116,14 +115,9 @@ export const trainTemplate = asyncHandler(async (req, res) => {
     console.log('[templates.train] Extracted profile keys:', Object.keys(profile.extractedProfile || {}));
     console.log('[templates.train] Thresholds:', profile.thresholds);
   } catch (aiError) {
-    console.warn('[templates.train] WARNING: AI extraction failed:', aiError.message);
-    console.log('[templates.train] Using fallback template generator...');
-    
-    // Generate fallback template for system stability
-    profile = generateFallbackTemplate(certificationId, certification, req.files.length);
-    usedFallback = true;
-    console.log('[templates.train] Fallback template generated successfully');
-    console.log('[templates.train] Note: This is a development fallback. Use real AI analysis in production.');
+    console.error('[templates.train] ERROR: AI extraction failed:', aiError.message);
+    // Do NOT generate fallback templates in production. Fail fast and let operator fix AI service.
+    throw new ApiError(502, 'AI service unavailable or returned invalid data. Template extraction failed. Please verify AI service and retry.');
   }
 
   if (isDemoMode()) {

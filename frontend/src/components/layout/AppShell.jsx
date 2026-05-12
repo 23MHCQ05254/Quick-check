@@ -5,7 +5,6 @@ import {
   Bell,
   BookOpenCheck,
   FileCheck2,
-  FileWarning,
   GraduationCap,
   LayoutDashboard,
   LogOut,
@@ -18,7 +17,7 @@ import {
   X
 } from 'lucide-react';
 import { useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Logo } from '../common/Logo.jsx';
 import { ThemeToggle } from '../common/ThemeToggle.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -32,7 +31,7 @@ const studentNav = [
 
 const mentorNav = [
   { label: 'Command', to: '/mentor/dashboard', icon: BarChart3, end: true },
-  { label: 'Review', to: '/mentor/review', icon: FileWarning },
+  { label: 'AI Logs', to: '/mentor/review', icon: FileCheck2 },
   { label: 'Moderation', to: '/mentor/moderation', icon: ShieldCheck },
   { label: 'Analytics', to: '/mentor/analytics', icon: RadioTower },
   { label: 'Catalog', to: '/mentor/catalog', icon: BookOpenCheck },
@@ -101,9 +100,18 @@ function Sidebar({ mobile = false, onClose }) {
 
 export function AppShell() {
   const [open, setOpen] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState('');
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const title = user.role === 'MENTOR' ? 'Mentor Verification Command' : 'Student Certificate Vault';
+  const submitGlobalSearch = (event) => {
+    if (event.key !== 'Enter') return;
+    const q = globalSearch.trim();
+    if (!q) return;
+    const target = user.role === 'MENTOR' ? '/mentor/students' : '/dashboard/certificates';
+    navigate(`${target}?search=${encodeURIComponent(q)}`);
+  };
 
   return (
     <div className="flex min-h-screen bg-grid-fade bg-[length:34px_34px]">
@@ -151,11 +159,22 @@ export function AppShell() {
 
             <div className="hidden min-w-[280px] items-center gap-2 rounded-2xl border border-slate-300/40 bg-white/70 px-3 py-2 text-sm text-slate-500 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-400 md:flex">
               <Search size={16} />
-              Search certificates, students, templates
+              <input
+                className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
+                placeholder="Search certificates, students, templates"
+                value={globalSearch}
+                onChange={(event) => setGlobalSearch(event.target.value)}
+                onKeyDown={submitGlobalSearch}
+              />
             </div>
 
             <div className="flex items-center gap-2">
-              <button className="focus-ring grid h-11 w-11 place-items-center rounded-2xl border border-slate-300/40 bg-white/70 text-slate-700 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200" aria-label="Notifications" title="Notifications">
+              <button
+                className="focus-ring grid h-11 w-11 place-items-center rounded-2xl border border-slate-300/40 bg-white/70 text-slate-700 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200"
+                aria-label="Notifications"
+                title="Notifications"
+                onClick={() => navigate(user.role === 'MENTOR' ? '/mentor/activity' : '/dashboard/certificates')}
+              >
                 <Bell size={18} />
               </button>
               <ThemeToggle />

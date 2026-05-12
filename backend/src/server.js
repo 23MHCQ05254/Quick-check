@@ -8,6 +8,13 @@ import slugify from 'slugify';
 dotenv.config();
 
 const PORT = Number.parseInt(process.env.PORT || '8000', 10);
+const aiServicePort = () => {
+  try {
+    return Number.parseInt(new URL(process.env.AI_SERVICE_URL || 'http://localhost:8001').port || '8001', 10);
+  } catch {
+    return 8001;
+  }
+};
 
 // Auto-seed certifications if they don't exist
 const autoSeedCertifications = async () => {
@@ -90,14 +97,28 @@ try {
   process.exit(1);
 }
 
-const server = app.listen(PORT, () => {
-  console.log(`[quickcheck] API listening on http://localhost:${PORT}`);
-});
+const listen = (port, attemptsLeft = 10) => {
+  const server = app.listen(port, () => {
+    console.log(`[quickcheck] API listening on http://localhost:${port}`);
+  });
 
-server.on('error', (err) => {
-  console.error('[quickcheck] Server error:', err);
-  process.exit(1);
-});
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && attemptsLeft > 0) {
+      const aiPort = aiServicePort();
+      const nextPort = port + 1 === aiPort ? port + 2 : port + 1;
+      console.warn(`[quickcheck] Port ${port} is in use, trying ${nextPort}`);
+      listen(nextPort, attemptsLeft - 1);
+      return;
+    }
+
+    console.error('[quickcheck] Server error:', err);
+    process.exit(1);
+  });
+
+  return server;
+};
+
+listen(PORT);
 
 process.on('uncaughtException', (err) => {
   console.error('[quickcheck] Uncaught exception:', err);

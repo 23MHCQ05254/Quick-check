@@ -13,8 +13,8 @@ const userSchema = new mongoose.Schema(
     graduationYear: Number,
     publicSlug: { type: String, unique: true, sparse: true },
     skills: [{ type: String, trim: true }],
-    skillScore: { type: Number, default: 42 },
-    placementReadiness: { type: Number, default: 38 },
+    skillScore: { type: Number, default: 0 },
+    placementReadiness: { type: Number, default: 0 },
     notifications: [
       {
         title: String,

@@ -134,7 +134,8 @@ export const checkForExactDuplicate = async ({ filePath, organization, certifica
 
     const existing = await Certificate.findOne({
       $or: orClauses,
-      ...query
+      ...query,
+      status: 'VERIFIED'
     });
 
     return existing ? { isDuplicate: true, existing, reason: 'EXACT_FILE_DUPLICATE' } : null;
@@ -203,4 +204,3 @@ export const detectDuplicateCertificate = async ({ analysis, uploadedCertificate
     return null;
   }
 };
-

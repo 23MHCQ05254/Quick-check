@@ -1,5 +1,5 @@
 import { BadgeCheck, FileStack, UploadCloud } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '../components/common/Button.jsx';
 import { GlassPanel } from '../components/common/GlassPanel.jsx';
 import { Skeleton } from '../components/common/Skeleton.jsx';
@@ -11,9 +11,17 @@ export default function TemplateManager() {
   const [certificationId, setCertificationId] = useState('');
   const [files, setFiles] = useState([]);
   const [message, setMessage] = useState('');
+  const [templateSearch, setTemplateSearch] = useState('');
   const [training, setTraining] = useState(false);
   const templates = useAsync(async () => (await api.get('/templates')).data.items, []);
   const catalog = useAsync(async () => (await api.get('/catalog')).data.items, []);
+  const filteredTemplates = useMemo(() => {
+    const q = templateSearch.trim().toLowerCase();
+    if (!q) return templates.data || [];
+    return (templates.data || []).filter((template) =>
+      `${template.certification?.name || ''} ${template.organization?.name || ''} ${template.status || ''}`.toLowerCase().includes(q)
+    );
+  }, [templates.data, templateSearch]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -75,11 +83,12 @@ export default function TemplateManager() {
           <p className="text-sm font-semibold text-cyber-green">Template registry</p>
           <h2 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">Active certification profiles</h2>
         </div>
+        <input className="field mt-4" placeholder="Search templates by certification, issuer, or status" value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} />
 
         <div className="mt-5 grid gap-3">
           {templates.loading && Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-24" />)}
           {!templates.loading &&
-            (templates.data || []).map((template) => (
+            filteredTemplates.map((template) => (
               <div key={template._id || template.id} className="rounded-2xl border border-slate-900/10 bg-white/55 p-4 dark:border-white/10 dark:bg-white/[0.04]">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -103,6 +112,11 @@ export default function TemplateManager() {
                 </div>
               </div>
             ))}
+          {!templates.loading && filteredTemplates.length === 0 && (
+            <p className="rounded-2xl border border-slate-900/10 bg-white/55 p-5 text-sm font-semibold text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400">
+              No template profiles match your search.
+            </p>
+          )}
         </div>
       </GlassPanel>
     </div>

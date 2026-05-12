@@ -94,9 +94,12 @@ export const extractTemplateProfileWithAi = async ({ files, certificationId }) =
 
     return data;
   } catch (error) {
-    console.error(`[quickcheck-ai] Template extraction failed: ${error.message}`);
+    // Include AI service response body when available to aid debugging
+    const aiDetails = error.response && error.response.data ? JSON.stringify(error.response.data) : null;
+    console.error(`[quickcheck-ai] Template extraction failed: ${error.message}`, aiDetails || '');
     throw new Error(
       `Real template learning failed: ${error.message}. ` +
+      (aiDetails ? `AI details: ${aiDetails}. ` : '') +
       'Please ensure AI_SERVICE_URL is configured and service is running. ' +
       `Current URL: ${aiUrl}`
     );

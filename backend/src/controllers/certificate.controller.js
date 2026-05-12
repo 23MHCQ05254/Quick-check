@@ -24,9 +24,13 @@ const statusFromAnalysis = (analysis, duplicate) => {
   // Prefer explicit verificationStatus from AI service when provided
   if (analysis.verificationStatus && typeof analysis.verificationStatus === 'string') {
     const s = analysis.verificationStatus.toUpperCase();
-    if (['VERIFIED', 'NEEDS_REVIEW', 'REJECTED'].includes(s)) {
+    if (['VERIFIED', 'ACCEPTED'].includes(s)) {
       console.log(`[certificates.upload] AI Verdict from verificationStatus: ${s}`);
-      return s;
+      return 'VERIFIED';
+    }
+    if (['REJECTED', 'NEEDS_REVIEW', 'REVIEW_REQUIRED'].includes(s)) {
+      console.log(`[certificates.upload] AI Verdict from verificationStatus: ${s}`);
+      return 'REJECTED';
     }
   }
 
@@ -40,38 +44,19 @@ const statusFromAnalysis = (analysis, duplicate) => {
     : null;
 
   if (score === null || Number.isNaN(score)) {
-    console.warn('[certificates.upload] WARNING: No numeric score available in analysis, defaulting to NEEDS_REVIEW');
-    return 'NEEDS_REVIEW';
+    console.warn('[certificates.upload] WARNING: No numeric score available in analysis, rejecting because AI verdict is incomplete');
+    return 'REJECTED';
   }
 
   console.log(`[certificates.upload] AI Verdict: score=${score}, fraudProbability=${analysis.fraudProbability || 'N/A'}`);
 
-  // Threshold bands (spec): >=75 VERIFIED, 55-74 NEEDS_REVIEW, <55 REJECTED
-  if (score >= 75) {
-    console.log('[certificates.upload] ✓ VERIFIED: score >= 75');
+  // Final AI verdict only: a certificate must strongly match the trained template.
+  if (score >= 95) {
+    console.log('[certificates.upload] ✓ VERIFIED: score >= 95');
     return 'VERIFIED';
   }
 
-  if (score >= 55) {
-    console.log('[certificates.upload] ~ NEEDS_REVIEW: 55 <= score < 75');
-    return 'NEEDS_REVIEW';
-  }
-
-  console.log('[certificates.upload] ✗ REJECTED: score < 55');
-  // Safety: if visual similarity is high but OCR/name checks failed (common OCR failures),
-  // avoid auto-rejecting genuine certificates — send to human review instead.
-  try {
-    const visual = Number(analysis.visualSimilarity || 0);
-    const anomalies = (analysis.anomalies || []).map(a => (a.type || '').toUpperCase());
-    const hasOcrFailure = anomalies.includes('OCR_FAILURE') || anomalies.includes('NO_TEMPLATE') || anomalies.includes('NAME_MISMATCH');
-    if (visual >= 70 && hasOcrFailure) {
-      console.log('[certificates.upload] Downgrading REJECT => NEEDS_REVIEW due to high visual similarity + OCR/name anomalies');
-      return 'NEEDS_REVIEW';
-    }
-  } catch (e) {
-    // ignore and proceed to reject
-  }
-
+  console.log('[certificates.upload] ✗ REJECTED: score < 95');
   return 'REJECTED';
 };
 
@@ -195,15 +180,20 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
   });
 
   // STEP 3: Check for similar certificates (after analysis)
-  const duplicate = await detectDuplicateCertificate({
-    analysis,
-    uploadedCertificateId: certificateId,
-    certificationId: certification._id,
-    organizationId: certification.organization._id,
-    issueDate,
-    studentId: userId,
-    studentName: req.user.name
-  });
+  let duplicate = null;
+  const provisionalStatus = statusFromAnalysis(analysis, null);
+  if (provisionalStatus === 'VERIFIED') {
+    duplicate = await detectDuplicateCertificate({
+      analysis,
+      uploadedCertificateId: certificateId,
+      certificationId: certification._id,
+      organizationId: certification.organization._id,
+      issueDate,
+      studentId: userId,
+      studentName: req.user.name
+    });
+  }
+  const finalStatus = statusFromAnalysis(analysis, duplicate);
 
   const certificate = await Certificate.create({
     userId,
@@ -227,7 +217,7 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
     textFingerprint: analysis.textFingerprint || textFingerprint(analysis.ocrText || ''),
     imageHash: analysis.imageHash,
     duplicateOf: duplicate?._id,
-    status: statusFromAnalysis(analysis, duplicate),
+    status: finalStatus,
     // legacy analysis field
     analysis,
     // structured extracted certificate data if provided by AI service
@@ -256,7 +246,7 @@ export const uploadCertificate = asyncHandler(async (req, res) => {
       duplicateProbability: analysis.duplicateProbability ?? (duplicate ? 100 : 0),
       suspiciousAreas: analysis.suspiciousAreas || analysis.suspiciousIndicators || null,
       aiReasoning: analysis.aiReasoning || analysis.explanations || null,
-      verificationStatus: analysis.verificationStatus || statusFromAnalysis(analysis, duplicate)
+      verificationStatus: finalStatus
     }
   });
 
@@ -366,4 +356,3 @@ export const getStudentDashboardStats = asyncHandler(async (req, res) => {
     certificationTypes: certsByType
   });
 });
-

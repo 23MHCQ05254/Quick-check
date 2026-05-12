@@ -159,14 +159,26 @@ const decorateStudent = (student, certificates) => {
     return certificateStudent?.toString?.() === studentId?.toString?.();
   });
   const avgRisk = owned.length ? Math.round(owned.reduce((sum, cert) => sum + certificateRisk(cert), 0) / owned.length) : 0;
+  const verified = owned.filter((cert) => cert.status === 'VERIFIED').length;
+  const latestUpload = owned.reduce((latest, cert) => {
+    const time = new Date(cert.createdAt || 0).getTime();
+    return time > latest ? time : latest;
+  }, 0);
+  const placementReadiness = owned.length
+    ? Math.round((verified / owned.length) * 70 + Math.max(0, 100 - avgRisk) * 0.3)
+    : (student.placementReadiness || 0);
   return {
     ...(typeof student.toJSON === 'function' ? student.toJSON() : student),
     password: undefined,
     certificates: owned.length,
-    verified: owned.filter((cert) => cert.status === 'VERIFIED').length,
+    verified,
     reviewRequired: owned.filter((cert) => cert.status === 'REVIEW_REQUIRED').length,
     fraudScore: avgRisk,
     trustScore: Math.max(0, 100 - avgRisk),
+    placementReadiness,
+    latestUpload: latestUpload ? new Date(latestUpload).toISOString() : null,
+    certificationNames: [...new Set(owned.map((cert) => cert.certification?.name || cert.title).filter(Boolean))],
+    certificateRows: owned,
     mentorStatus: avgRisk >= 65 ? 'WATCHLIST' : owned.length ? 'ACTIVE' : 'NEW'
   };
 };
@@ -227,26 +239,53 @@ export const listStudents = asyncHandler(async (req, res) => {
   let students = (await getAllStudents()).map((student) => decorateStudent(student, certificates));
 
   const search = (req.query.search || '').toString().toLowerCase();
-  const department = (req.query.department || '').toString();
+  const department = (req.query.department || req.query.branch || '').toString();
   const year = Number(req.query.year) || null;
   const risk = (req.query.risk || '').toString();
   const readiness = (req.query.readiness || '').toString();
+  const certification = (req.query.certification || '').toString().toLowerCase();
+  const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom) : null;
+  const dateTo = req.query.dateTo ? new Date(req.query.dateTo) : null;
+  const minCerts = req.query.minCerts !== undefined && req.query.minCerts !== '' ? Number(req.query.minCerts) : null;
+  const maxCerts = req.query.maxCerts !== undefined && req.query.maxCerts !== '' ? Number(req.query.maxCerts) : null;
   const sort = (req.query.sort || 'readiness').toString();
 
   students = students.filter((student) => {
-    if (search && !`${student.name} ${student.email} ${student.department} ${(student.skills || []).join(' ')}`.toLowerCase().includes(search)) return false;
+    const haystack = `${student.name} ${student.email} ${student.department} ${student.branch || ''} ${(student.skills || []).join(' ')} ${(student.certificationNames || []).join(' ')}`.toLowerCase();
+    if (search && !haystack.includes(search)) return false;
     if (department && student.department !== department) return false;
+    if (certification && !(student.certificationNames || []).join(' ').toLowerCase().includes(certification)) return false;
     if (year && student.graduationYear !== year) return false;
     if (risk === 'high' && student.fraudScore < 65) return false;
     if (risk === 'medium' && (student.fraudScore < 35 || student.fraudScore >= 65)) return false;
     if (risk === 'low' && student.fraudScore >= 35) return false;
     if (readiness === 'ready' && (student.placementReadiness || 0) < 70) return false;
+    if (readiness === 'moderate' && ((student.placementReadiness || 0) < 40 || (student.placementReadiness || 0) >= 70)) return false;
     if (readiness === 'needs-focus' && (student.placementReadiness || 0) >= 70) return false;
+    if (minCerts !== null && (student.certificates || 0) < minCerts) return false;
+    if (maxCerts !== null && (student.certificates || 0) > maxCerts) return false;
+    if (dateFrom || dateTo) {
+      const inRange = (student.certificateRows || []).some((cert) => {
+        const created = new Date(cert.createdAt || 0);
+        if (dateFrom && created < dateFrom) return false;
+        if (dateTo) {
+          const inclusiveTo = new Date(dateTo);
+          inclusiveTo.setHours(23, 59, 59, 999);
+          if (created > inclusiveTo) return false;
+        }
+        return true;
+      });
+      if (!inRange) return false;
+    }
     return true;
   });
 
   const sorters = {
     readiness: (a, b) => (b.placementReadiness || 0) - (a.placementReadiness || 0),
+    trust: (a, b) => (b.trustScore || 0) - (a.trustScore || 0),
+    verified: (a, b) => (b.verified || 0) - (a.verified || 0),
+    recent: (a, b) => new Date(b.latestUpload || 0) - new Date(a.latestUpload || 0),
+    fraud: (a, b) => (b.fraudScore || 0) - (a.fraudScore || 0),
     risk: (a, b) => (b.fraudScore || 0) - (a.fraudScore || 0),
     certificates: (a, b) => (b.certificates || 0) - (a.certificates || 0),
     name: (a, b) => a.name.localeCompare(b.name)
@@ -254,12 +293,72 @@ export const listStudents = asyncHandler(async (req, res) => {
   students.sort(sorters[sort] || sorters.readiness);
 
   res.json({
-    items: students,
+    items: students.map(({ certificateRows, ...student }) => student),
     facets: {
       departments: [...new Set(students.map((student) => student.department).filter(Boolean))],
-      years: [...new Set(students.map((student) => student.graduationYear).filter(Boolean))]
+      years: [...new Set(students.map((student) => student.graduationYear).filter(Boolean))],
+      certifications: [...new Set(students.flatMap((student) => student.certificationNames || []).filter(Boolean))]
     }
   });
+});
+
+const csvEscape = (value) => {
+  const text = value === undefined || value === null ? '' : String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+export const exportStudents = asyncHandler(async (req, res) => {
+  const certificates = await getAllCertificates();
+  let students = (await getAllStudents()).map((student) => decorateStudent(student, certificates));
+  req.query = { ...req.query };
+
+  const fakeRes = {
+    payload: null,
+    json(payload) {
+      this.payload = payload;
+    }
+  };
+  await listStudents({ ...req, query: req.query }, fakeRes);
+  const allowedIds = new Set((fakeRes.payload?.items || []).map((student) => (student._id || student.id)?.toString()));
+  students = students.filter((student) => allowedIds.has((student._id || student.id)?.toString()));
+
+  const rows = students.flatMap((student) => {
+    const certRows = student.certificateRows?.length ? student.certificateRows : [null];
+    return certRows.map((cert) => ({
+      'student name': student.name,
+      email: student.email,
+      branch: student.department || student.branch || '',
+      year: student.graduationYear || '',
+      'certificate name': cert?.certification?.name || cert?.title || '',
+      issuer: cert?.organization?.name || '',
+      'upload date': cert?.createdAt ? new Date(cert.createdAt).toISOString() : '',
+      'verification status': cert?.status || '',
+      'fraud score': certificateRisk(cert || {}),
+      'trust score': student.trustScore || 0,
+      'readiness score': student.placementReadiness || 0,
+      'verified cert count': student.verified || 0
+    }));
+  });
+
+  const columns = Object.keys(rows[0] || {
+    'student name': '', email: '', branch: '', year: '', 'certificate name': '', issuer: '', 'upload date': '',
+    'verification status': '', 'fraud score': '', 'trust score': '', 'readiness score': '', 'verified cert count': ''
+  });
+  const format = (req.query.format || 'csv').toString().toLowerCase();
+
+  if (format === 'xlsx') {
+    const htmlRows = rows.map((row) => `<tr>${columns.map((col) => `<td>${String(row[col] ?? '').replace(/[<>&]/g, (ch) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[ch]))}</td>`).join('')}</tr>`).join('');
+    const html = `<table><thead><tr>${columns.map((col) => `<th>${col}</th>`).join('')}</tr></thead><tbody>${htmlRows}</tbody></table>`;
+    res.setHeader('Content-Type', 'application/vnd.ms-excel');
+    res.setHeader('Content-Disposition', 'attachment; filename="quickcheck-filtered-students.xls"');
+    res.send(html);
+    return;
+  }
+
+  const csv = [columns.map(csvEscape).join(','), ...rows.map((row) => columns.map((col) => csvEscape(row[col])).join(','))].join('\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="quickcheck-filtered-students.csv"');
+  res.send(csv);
 });
 
 export const listReviewQueue = asyncHandler(async (req, res) => {
@@ -466,18 +565,16 @@ export const deleteCertificate = asyncHandler(async (req, res) => {
 
 export const analytics = asyncHandler(async (_req, res) => {
   const certificates = await getAllCertificates();
-  const students = await getAllStudents();
-  const hasCertificates = certificates.length > 0;
-  const readinessTrend = hasCertificates
-    ? [
-      { month: 'Jan', readiness: 48, verified: 8 },
-      { month: 'Feb', readiness: 54, verified: 14 },
-      { month: 'Mar', readiness: 61, verified: 19 },
-      { month: 'Apr', readiness: 68, verified: 28 },
-      { month: 'May', readiness: 72, verified: 36 },
-      { month: 'Jun', readiness: summarize(certificates, students).avgPlacementReadiness, verified: summarize(certificates, students).VERIFIED }
-    ]
-    : zeroMonthlyTrend().map(({ month }) => ({ month, readiness: 0, verified: 0 }));
+  const students = (await getAllStudents()).map((student) => decorateStudent(student, certificates));
+  const readinessTrend = trendFromCertificates(certificates).map((bucket) => {
+    const monthCertificates = certificates.filter((certificate) => monthKey(certificate.createdAt) === bucket.month);
+    const verified = monthCertificates.filter((certificate) => certificate.status === 'VERIFIED').length;
+    return {
+      month: bucket.month,
+      readiness: monthCertificates.length ? Math.round((verified / monthCertificates.length) * 100) : 0,
+      verified
+    };
+  });
 
   res.json({
     organizationRisk: organizationStats(certificates),
@@ -545,4 +642,3 @@ export const notificationCenter = asyncHandler(async (_req, res) => {
   const certificates = await getAllCertificates();
   res.json({ items: buildNotifications(certificates) });
 });
-

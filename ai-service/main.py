@@ -130,155 +130,72 @@ try:
     from utils.db import MongoDBManager
     logger.info("[✓] MongoDBManager available")
 except ImportError as e:
-    MongoDBManager = None
-    logger.warning(f"[✗] MongoDBManager: {e}")
+    # Do not silently set to None. Create a placeholder that raises when used.
+    def _make_missing(name: str, err: Exception):
+        class _Missing:
+            def __init__(self, *args, **kwargs):
+                raise RuntimeError(f"Missing dependency {name}: {err}")
+        return _Missing
+
+    MongoDBManager = _make_missing('MongoDBManager', e)
+    logger.error(f"[✗] MongoDBManager import failed: {e}")
 
 try:
     from utils.dynamic_comparator import DynamicComparator
     logger.info("[✓] DynamicComparator available")
 except ImportError as e:
-    DynamicComparator = None
-    logger.warning(f"[✗] DynamicComparator: {e}")
+    DynamicComparator = _make_missing('DynamicComparator', e)
+    logger.error(f"[✗] DynamicComparator import failed: {e}")
 
 try:
     from utils.template_extractor import TemplateExtractor
     logger.info("[✓] TemplateExtractor available")
 except ImportError as e:
-    TemplateExtractor = None
-    logger.warning(f"[✗] TemplateExtractor: {e}")
+    TemplateExtractor = _make_missing('TemplateExtractor', e)
+    logger.error(f"[✗] TemplateExtractor import failed: {e}")
 
 try:
     from utils.template_aggregator import TemplateAggregator
     logger.info("[✓] TemplateAggregator available")
 except ImportError as e:
-    TemplateAggregator = None
-    logger.warning(f"[✗] TemplateAggregator: {e}")
-
-# ============================================================================
-# FastAPI App Setup
-# ============================================================================
+    TemplateAggregator = _make_missing('TemplateAggregator', e)
+    logger.error(f"[✗] TemplateAggregator import failed: {e}")
 
 app = FastAPI(title="QuickCheck AI Service", version="1.0.0")
 
-# CORS Middleware - Allow frontend on localhost:5173 and others
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in config.CORS_ORIGINS] + ["*"],
+    allow_origins=config.CORS_ORIGINS if hasattr(config, "CORS_ORIGINS") else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# ============================================================================
-# Exception Handling Middleware
-# ============================================================================
-
-class ExceptionMiddleware(BaseHTTPMiddleware):
-    """Catch all unhandled exceptions and return structured error responses."""
-
-    async def dispatch(self, request: Request, call_next):
-        try:
-            # attach request id
-            request_id = str(uuid4())
-            request.state.request_id = request_id
-            response = await call_next(request)
-            # Ensure request id header
-            response.headers.setdefault("X-Request-ID", request_id)
-            return response
-        except Exception as e:
-            request_id = getattr(request.state, "request_id", "") or str(uuid4())
-            # Detailed logging
-            logger.error(f"Unhandled exception [{request_id}] in {request.method} {request.url.path}: {e}", exc_info=True)
-
-            exc_info = format_exception(e, include_trace=config.DEBUG)
-            content = {
-                "success": False,
-                "error": exc_info.get("message", "Internal server error"),
-                "type": exc_info.get("type"),
-                "trace": exc_info.get("trace") if config.DEBUG else None,
-                "requestId": request_id,
-                "path": str(request.url.path),
-            }
-
-            # Make serializable
-            content = make_serializable(content)
-
-            return JSONResponse(status_code=500, content=content)
+def make_serializable(obj: Any) -> Any:
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): make_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [make_serializable(v) for v in obj]
+    if isinstance(obj, (datetime.datetime, datetime.date)):
+        return obj.isoformat()
+    try:
+        if hasattr(obj, "to_dict"):
+            return make_serializable(obj.to_dict())
+        return str(obj)
+    except Exception:
+        return None
 
 
-app.add_middleware(ExceptionMiddleware)
-
-
-# ============================================================================
-# Response Models
-# ============================================================================
-
-def success_response(data: dict[str, Any], message: str = "Success") -> dict[str, Any]:
-    """Create a structured success response."""
-    return {
-        "success": True,
-        "message": message,
-        "data": data,
-    }
-
-
-def error_response(error: str, details: str = "", status_code: int = 400) -> dict[str, Any]:
-    """Create a structured error response."""
+def error_response(error: str, details: Any = "", status_code: int = 500) -> dict[str, Any]:
     return {
         "success": False,
         "error": error,
-        "details": details,
+        "details": make_serializable(details),
+        "statusCode": status_code,
     }
-
-
-def make_serializable(obj: Any) -> Any:
-    """Recursively convert numpy and other non-serializable types to Python builtins."""
-    # Handle None
-    if obj is None:
-        return None
-
-    # Primitive types
-    if isinstance(obj, (str, bool, int)):
-        return obj
-    if isinstance(obj, float):
-        if obj == float('inf'):
-            return None
-        return float(obj)
-
-    # Path
-    if isinstance(obj, Path):
-        return str(obj)
-
-    # Numpy types
-    try:
-        import numpy as _np
-        if isinstance(obj, (_np.floating, _np.floating.__class__)):
-            return float(obj)
-        if isinstance(obj, (_np.integer, _np.integer.__class__)):
-            return int(obj)
-        if isinstance(obj, _np.ndarray):
-            return obj.tolist()
-    except Exception:
-        pass
-
-    # Dictionaries
-    if isinstance(obj, dict):
-        return {str(k): make_serializable(v) for k, v in obj.items()}
-
-    # Iterables
-    if isinstance(obj, (list, tuple, set)):
-        return [make_serializable(v) for v in obj]
-
-    # Datetime
-    if isinstance(obj, (datetime.datetime, datetime.date)):
-        return obj.isoformat()
-
-    # Fallback to string
-    try:
-        return str(obj)
-    except Exception:
-        return None
 
 
 def format_exception(e: Exception, include_trace: bool = False) -> dict[str, Any]:
@@ -531,7 +448,14 @@ def extract_image_profile(path: Path) -> dict[str, Any]:
         logger.error(f"Failed to extract image profile: {e}")
         return profile
 
+    # ensure the extracted profile includes the on-disk path for strict comparisons
+    try:
+        profile["filePath"] = str(path)
+    except Exception:
+        pass
+
     return profile
+
 
 
 def extract_pdf_text_content(path: Path) -> str:
@@ -773,6 +697,7 @@ async def analyze(
     certificate_id: str = Form(""),
     issue_date: str = Form(""),
     organization: str = Form(""),
+    strict: str = Form("false"),
 ) -> dict[str, Any]:
     """
     Analyze certificate for fraud detection.
@@ -814,6 +739,9 @@ async def analyze(
         except json.JSONDecodeError as e:
             logger.warning(f"[Analyze] Invalid template JSON, using empty template: {e}")
             template = {}
+
+        # Strict mode: allow template to enforce strict verification or client to request it
+        use_strict = bool(str(template.get("strictTemplateMatch", False)).lower() in ("1", "true", "yes")) or bool(str(strict).lower() in ("1", "true", "yes"))
 
         # Tesseract availability check - if OCR pipeline required but missing, report
         if (pytesseract is None or (config.TESSERACT_PATH and not Path(config.TESSERACT_PATH).exists())) and run_ocr:
@@ -872,30 +800,58 @@ async def analyze(
                     uploaded_profile=profile,
                     student_name=student_name,
                     certificate_id=extracted_id,
+                    strict=use_strict,
                 )
-
-                name_match = {
-                    "score": comparison.get("metrics", {}).get("nameSimilarity", 0),
-                    "matchedText": profile.get("ocrText", "")[:160] if profile.get("ocrText") else "",
-                    "method": "dynamic-comparison",
-                }
-                visual = {
-                    "score": comparison.get("metrics", {}).get("visualSimilarity", 0),
-                    "components": {
-                        "qrSimilarity": comparison.get("metrics", {}).get("qrSimilarity", 0),
-                        "logoSimilarity": comparison.get("metrics", {}).get("logoSimilarity", 0),
-                        "spacingSimilarity": comparison.get("metrics", {}).get("spacingSimilarity", 0),
-                        "alignmentSimilarity": comparison.get("metrics", {}).get("alignmentSimilarity", 0),
-                        "structureSimilarity": comparison.get("metrics", {}).get("structureSimilarity", 0),
-                    },
-                }
-                risk = {
-                    "fraudProbability": comparison.get("fraudProbability", 100),
-                    "confidence": comparison.get("confidence", 0),
-                    "suspiciousIndicators": comparison.get("explanations", []),
-                    "anomalies": comparison.get("anomalies", []),
-                    "recommendation": comparison.get("recommendation", "REJECT"),
-                }
+                # If strict mode returned SSIM-focused result, surface SSIM as visual score
+                if comparison.get("ssimScore", None) is not None:
+                    ssim_pct = round(float(comparison.get("ssimScore", 0)) * 100, 2)
+                    name_match = {
+                        "score": comparison.get("metrics", {}).get("nameSimilarity", 0),
+                        "matchedText": profile.get("ocrText", "")[:160] if profile.get("ocrText") else "",
+                        "method": "strict-ssim" if use_strict else "dynamic-comparison",
+                    }
+                    visual = {
+                        "score": ssim_pct,
+                        "components": {
+                            "ssimScore": comparison.get("ssimScore", 0),
+                            "qrSimilarity": comparison.get("metrics", {}).get("qrSimilarity", 0),
+                            "structureSimilarity": comparison.get("metrics", {}).get("structureSimilarity", 0),
+                        },
+                    }
+                    risk = {
+                        "fraudProbability": comparison.get("fraudProbability", 100),
+                        "confidence": comparison.get("confidence", 0),
+                        "trustScore": comparison.get("trustScore", max(0, 100 - float(comparison.get("fraudProbability", 100) or 100))),
+                        "weightedConfidence": comparison.get("weightedConfidence", comparison.get("confidence", 0)),
+                        "suspiciousIndicators": comparison.get("explanations", []),
+                        "anomalies": comparison.get("anomalies", []),
+                        "recommendation": comparison.get("recommendation", "REJECT"),
+                    }
+                else:
+                    name_match = {
+                        "score": comparison.get("metrics", {}).get("nameSimilarity", 0),
+                        "matchedText": profile.get("ocrText", "")[:160] if profile.get("ocrText") else "",
+                        "method": "dynamic-comparison",
+                    }
+                    visual = {
+                        "score": comparison.get("metrics", {}).get("visualSimilarity", 0),
+                        "components": {
+                            "qrSimilarity": comparison.get("metrics", {}).get("qrSimilarity", 0),
+                            "logoSimilarity": comparison.get("metrics", {}).get("logoSimilarity", 0),
+                            "spacingSimilarity": comparison.get("metrics", {}).get("spacingSimilarity", 0),
+                            "alignmentSimilarity": comparison.get("metrics", {}).get("alignmentSimilarity", 0),
+                            "structureSimilarity": comparison.get("metrics", {}).get("structureSimilarity", 0),
+                        },
+                    }
+                    risk = {
+                        "fraudProbability": comparison.get("fraudProbability", 100),
+                        "confidence": comparison.get("confidence", 0),
+                        "trustScore": comparison.get("trustScore", max(0, 100 - float(comparison.get("fraudProbability", 100) or 100))),
+                        "weightedConfidence": comparison.get("weightedConfidence", comparison.get("confidence", 0)),
+                        "suspiciousIndicators": comparison.get("explanations", []),
+                        "anomalies": comparison.get("anomalies", []),
+                        "recommendation": comparison.get("recommendation", "REJECT"),
+                    }
             except Exception as e:
                 logger.warning(f"[Analyze] DynamicComparator failed, falling back: {e}")
                 name_match = name_similarity(student_name, profile.get("ocrText", ""))
@@ -926,12 +882,13 @@ async def analyze(
 
         logger.info(f"[Analyze] Analysis complete: recommendation={risk.get('recommendation')} confidence={risk.get('confidence')}")
 
-        # Map recommendation to robust verification status
+        # Map recommendation to final AI-only verification status.
         rec = risk.get("recommendation", "REJECT")
-        if rec == "ACCEPT":
+        confidence = float(risk.get("confidence", 0) or 0)
+        trust_score = float(risk.get("trustScore", risk.get("weightedConfidence", confidence)) or confidence)
+        fraud_probability = float(risk.get("fraudProbability", 100) or 100)
+        if rec == "ACCEPT" and (max(confidence, trust_score) >= 95 or fraud_probability <= 5):
             verification_status = "VERIFIED"
-        elif rec == "REVIEW":
-            verification_status = "NEEDS_REVIEW"
         else:
             verification_status = "REJECTED"
 
@@ -1014,30 +971,86 @@ async def extract_template_profile(
 
         extractor = TemplateExtractor()
         profiles = []
+        skipped_files: list[dict[str, str]] = []
 
         # Extract profiles from all samples
         for upload in files:
             try:
+                logger.info(f"[Templates] Processing upload: {getattr(upload, 'filename', 'unknown')}")
                 is_valid, error_msg = validate_upload(upload)
                 if not is_valid:
-                    logger.warning(f"[Templates] Skipping invalid file: {error_msg}")
+                    logger.warning(f"[Templates] Skipping invalid file {getattr(upload, 'filename', 'unknown')}: {error_msg}")
+                    skipped_files.append({"filename": getattr(upload, 'filename', 'unknown'), "reason": error_msg})
                     continue
 
-                path = save_upload(upload)
+                try:
+                    path = save_upload(upload)
+                except Exception as e:
+                    logger.warning(f"[Templates] Failed to save upload {getattr(upload, 'filename', 'unknown')}: {e}")
+                    skipped_files.append({"filename": getattr(upload, 'filename', 'unknown'), "reason": f"save_failed: {e}"})
+                    continue
 
                 # Handle PDF
                 if path.suffix.lower() == ".pdf":
-                    if not convert_from_path:
-                        logger.warning("[Templates] Skipping PDF (pdf2image unavailable)")
-                        continue
+                    # Prefer pdf2image/poppler if available; otherwise try PyMuPDF (fitz)
+                    if convert_from_path:
+                        try:
+                            images = convert_from_path(path, poppler_path=config.POPPLER_PATH)
+                            if images:
+                                path_temp = Path(tempfile.gettempdir()) / f"page_{path.stem}.png"
+                                images[0].save(path_temp, "PNG")
+                                path = path_temp
+                        except Exception as e:
+                            logger.warning(f"[Templates] pdf2image conversion failed: {e}")
 
-                    images = convert_from_path(path, poppler_path=config.POPPLER_PATH)
-                    if images:
-                        path_temp = Path(tempfile.gettempdir()) / f"page_{path.stem}.png"
-                        images[0].save(path_temp, "PNG")
-                        path = path_temp
+                    if path.suffix.lower() == ".pdf":
+                        # pdf2image didn't convert; try PyMuPDF as a pure-python fallback
+                        try:
+                            import fitz
+
+                            doc = fitz.open(str(path))
+                            if doc.page_count > 0:
+                                page = doc.load_page(0)
+                                pix = page.get_pixmap(dpi=200)
+                                path_temp = Path(tempfile.gettempdir()) / f"page_{path.stem}.png"
+                                pix.save(str(path_temp))
+                                path = path_temp
+                                logger.info(f"[Templates] PDF converted via PyMuPDF: {path_temp}")
+                        except Exception as e:
+                            logger.warning(f"[Templates] Skipping PDF (no pdf2image/poppler and PyMuPDF failed): {e}")
+                            extracted_pdf_text = extract_pdf_text_content(path)
+                            if extracted_pdf_text.strip():
+                                profile = {
+                                    "resolution": {"width": 0, "height": 0, "aspectRatio": 0},
+                                    "dominantColors": [],
+                                    "brightness": 0,
+                                    "edgeDensity": 0,
+                                    "textDensity": 0,
+                                    "cornerDensity": 0,
+                                    "imageHash": binary_hash(path),
+                                    "perceptualHash": "",
+                                    "qrData": "",
+                                    "ocrText": extracted_pdf_text[:8000],
+                                    "ocrConfidence": 70.0,
+                                    "components": [],
+                                    "relationships": [],
+                                    "filePath": str(path),
+                                    "pdfTextOnly": True,
+                                }
+                                profiles.append(profile)
+                                logger.info(f"[Templates] Extracted PDF text fallback from {getattr(upload, 'filename', 'unknown')}")
+                                continue
+
+                            skipped_files.append({"filename": getattr(upload, 'filename', 'unknown'), "reason": f"pdf_conversion_failed: {e}"})
+                            continue
 
                 profile = extractor.extract_image_profile(path)
+
+                # attach path for diagnostics
+                try:
+                    profile["filePath"] = str(path)
+                except Exception:
+                    pass
 
                 # Extract spatial relationships
                 if profile.get("components"):
@@ -1049,17 +1062,18 @@ async def extract_template_profile(
                     profile["relationships"] = relationships
 
                 profiles.append(profile)
-                logger.info(f"[Templates] Extracted profile from {upload.filename}")
+                logger.info(f"[Templates] Extracted profile from {getattr(upload, 'filename', 'unknown')}")
 
             except Exception as e:
                 logger.warning(f"[Templates] Failed to extract {upload.filename}: {e}")
                 continue
 
         if not profiles:
-            logger.error("[Templates] No profiles extracted from uploaded files")
+            logger.error("[Templates] No profiles extracted from uploaded files; returning details of skipped files")
+            # Provide diagnostics to caller for easier debugging
             raise HTTPException(
                 status_code=400,
-                detail="No profiles could be extracted from uploaded files",
+                detail={"message": "No profiles could be extracted from uploaded files", "skipped": skipped_files},
             )
 
         # Aggregate profiles
@@ -1074,6 +1088,7 @@ async def extract_template_profile(
         return {
             "extractedProfile": extracted,
             "thresholds": thresholds,
+            "trainedSamplesCount": len(profiles),
             "sampleCount": len(profiles),
             "aggregationQuality": extracted.get("metadata", {}).get("trainingQuality", "unknown"),
         }

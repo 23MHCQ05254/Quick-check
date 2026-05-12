@@ -1,0 +1,21 @@
+fastapi==0.115.6
+uvicorn[standard]==0.18.3
+python-multipart==0.0.6
+opencv-python-headless==4.7.0.72
+pytesseract==0.3.10
+numpy==1.24.4
+Pillow==9.5.0
+pyzbar==0.1.8
+rapidfuzz==2.15.1
+ImageHash==4.3.1
+pdf2image==1.16.3
+pypdf==5.1.0
+pymupdf==1.24.3
+pymongo==4.3.3
+python-dotenv==1.0.0
+python-slugify==8.0.1
+easyocr==1.6.2
+
+# Notes:
+# - These versions are chosen for Python 3.11 compatibility.
+# - Adjust versions as needed for your environment.

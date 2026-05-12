@@ -29,6 +29,12 @@ class TemplateAggregator:
             "cornerDensity": TemplateAggregator._average_metric(profiles, ["cornerDensity"]),
             "components": TemplateAggregator._aggregate_components(profiles),
             "relationships": TemplateAggregator._aggregate_relationships(profiles),
+            "ocrText": "\n".join([p.get("ocrText", "") for p in profiles if p.get("ocrText")])[:20000],
+            "textBlocks": [block for p in profiles for block in (p.get("textBlocks") or [])][:500],
+            "ocrBoundingBoxes": [box for p in profiles for box in (p.get("ocrBoundingBoxes") or [])][:500],
+            "qrData": TemplateAggregator._most_common([p.get("qrData") for p in profiles if p.get("qrData")]),
+            "logos": TemplateAggregator._components_by_type(profiles, {"LOGO", "HEADER_LOGO"}),
+            "signatures": TemplateAggregator._components_by_type(profiles, {"SIGNATURE"}),
             "hashes": {
                 "perceptual": [p.get("perceptualHash") for p in profiles if p.get("perceptualHash")],
                 "binary": [p.get("imageHash") for p in profiles],
@@ -42,6 +48,27 @@ class TemplateAggregator:
         }
 
         return aggregated
+
+    @staticmethod
+    def _most_common(values: list[Any]) -> Any:
+        if not values:
+            return ""
+        counts: dict[str, int] = {}
+        originals: dict[str, Any] = {}
+        for value in values:
+            key = str(value)
+            counts[key] = counts.get(key, 0) + 1
+            originals[key] = value
+        return originals[max(counts, key=counts.get)]
+
+    @staticmethod
+    def _components_by_type(profiles: list[dict[str, Any]], types: set[str]) -> list[dict[str, Any]]:
+        return [
+            component
+            for profile in profiles
+            for component in (profile.get("components") or [])
+            if component.get("type") in types
+        ][:100]
 
     @staticmethod
     def _aggregate_resolution(profiles: list[dict[str, Any]]) -> dict[str, float]:

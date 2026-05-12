@@ -6,7 +6,7 @@ export const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_URL || imp
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 60000,
   headers: {
     Accept: 'application/json'
   }
@@ -121,6 +121,7 @@ export const trainTemplate = (certificationId, files) => {
   form.append('certificationId', certificationId);
   files.forEach((file) => form.append('samples', file));
   return api.post('/templates/train', form, {
+    timeout: 180000,
     headers: { 'Content-Type': 'multipart/form-data' }
   });
 };
