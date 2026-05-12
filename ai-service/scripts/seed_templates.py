@@ -65,9 +65,13 @@ logger = logging.getLogger(__name__)
 class TemplateSeeder:
     """Orchestrate template learning and storage."""
 
-    def __init__(self, templates_dir: Path | str = None):
+    def __init__(self, templates_dir: Path | str = None, fallback_dirs: list[Path] | None = None):
         """Initialize the seeder."""
         self.templates_dir = Path(templates_dir or "templates")
+        self.fallback_dirs = fallback_dirs or [
+            Path(__file__).resolve().parents[2] / "test-certs-real",
+            Path(__file__).resolve().parents[2] / "test-certs",
+        ]
         self.db = MongoDBManager()
         self.extractor = TemplateExtractor()
         self.stats = {
@@ -85,9 +89,17 @@ class TemplateSeeder:
         logger.info("=" * 60)
 
         # Validate templates directory
-        if not self.templates_dir.exists():
-            logger.error(f"Templates directory not found: {self.templates_dir}")
-            return False
+        if not self.templates_dir.exists() or not any(self.templates_dir.iterdir()):
+            logger.warning(f"Templates directory missing or empty: {self.templates_dir}")
+            logger.warning("Falling back to repository sample directories for seeding")
+            for fallback in self.fallback_dirs:
+                if fallback.exists() and any(fallback.iterdir()):
+                    self.templates_dir = fallback
+                    logger.info(f"Using fallback seeding source: {self.templates_dir}")
+                    break
+            else:
+                logger.error("No template or sample directories found to seed from")
+                return False
 
         # Connect to MongoDB
         if not self.db.connect():
@@ -112,7 +124,30 @@ class TemplateSeeder:
 
     def _process_templates_directory(self):
         """Recursively scan templates directory."""
-        for org_dir in sorted(self.templates_dir.iterdir()):
+        entries = list(sorted(self.templates_dir.iterdir()))
+
+        # Support flat sample folders (e.g. test-certs-real/*.png) by treating
+        # the folder itself as a synthetic organization.
+        if any(self._is_supported_file(p) for p in entries):
+            synthetic_org = self.templates_dir.name
+            logger.info(f"[INFO] Processing flat sample folder as synthetic org: {synthetic_org}")
+            try:
+                org_slug = slugify(synthetic_org, lowercase=True, separator="-")
+                self.db.upsert_organization(
+                    name=synthetic_org,
+                    slug=org_slug,
+                    category="CERTIFICATION_PROVIDER",
+                )
+                self.stats["organizations"] += 1
+            except Exception as e:
+                logger.error(f"Failed to create synthetic organization '{synthetic_org}': {e}")
+                self.stats["errors"] += 1
+                return
+
+            self._process_organization_samples(synthetic_org, self.templates_dir)
+            return
+
+        for org_dir in entries:
             if not org_dir.is_dir() or org_dir.name.startswith("."):
                 continue
 
@@ -338,6 +373,12 @@ def main():
         help="Path to templates directory (default: templates/)",
     )
     parser.add_argument(
+        "--fallback-dir",
+        action="append",
+        default=[],
+        help="Optional fallback sample directory to use if templates-dir is empty (can be repeated)",
+    )
+    parser.add_argument(
         "--mongodb-uri",
         default=None,
         help="MongoDB URI (default: from MONGODB_URI env var)",
@@ -347,6 +388,7 @@ def main():
 
     seeder = TemplateSeeder(
         templates_dir=args.templates_dir,
+        fallback_dirs=[Path(p) for p in args.fallback_dir] if args.fallback_dir else None,
     )
 
     if args.mongodb_uri:

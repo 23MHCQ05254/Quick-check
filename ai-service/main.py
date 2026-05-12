@@ -120,6 +120,13 @@ except Exception as e:
     logger.warning(f"[✗] pdf2image: {e}")
 
 try:
+    from pypdf import PdfReader
+    logger.info("[✓] pypdf available")
+except Exception as e:
+    PdfReader = None
+    logger.warning(f"[✗] pypdf: {e}")
+
+try:
     from utils.db import MongoDBManager
     logger.info("[✓] MongoDBManager available")
 except ImportError as e:
@@ -527,6 +534,27 @@ def extract_image_profile(path: Path) -> dict[str, Any]:
     return profile
 
 
+def extract_pdf_text_content(path: Path) -> str:
+    """Extract text from a PDF without external rendering dependencies."""
+    if PdfReader is None:
+        return ""
+
+    try:
+        reader = PdfReader(str(path))
+        parts = []
+        for page in reader.pages[:5]:
+            try:
+                text = page.extract_text() or ""
+                if text.strip():
+                    parts.append(text)
+            except Exception as page_error:
+                logger.warning(f"[PDF] Page text extraction failed: {page_error}")
+        return "\n".join(parts).strip()
+    except Exception as e:
+        logger.warning(f"[PDF] Text extraction failed: {e}")
+        return ""
+
+
 def color_similarity(current: list[str], reference: list[str]) -> float:
     """Compare color profiles."""
     if not current or not reference:
@@ -762,6 +790,7 @@ async def analyze(
     path = None
     pdf_converted = False
     ocr_attempted = False
+    profile: dict[str, Any] | None = None
     try:
         # Validate upload
         is_valid, error_msg = validate_upload(file)
@@ -796,38 +825,40 @@ async def analyze(
                 "details": "Tesseract executable not found or pytesseract unavailable. Please install Tesseract and set TESSERACT_PATH in config.",
             }))
 
-        # Handle PDF conversion safely
+        # Handle PDF safely: render to image if possible, otherwise extract text directly.
         if path.suffix.lower() == ".pdf":
-            if not convert_from_path:
-                logger.error("[Analyze] PDF conversion not available (pdf2image not installed)")
-                return JSONResponse(status_code=503, content=make_serializable({"success": False, "error": "PDF conversion unavailable", "type": "PDF_UNAVAILABLE"}))
+            logger.info("[Analyze] Processing PDF upload")
+            extracted_pdf_text = extract_pdf_text_content(path)
+            if extracted_pdf_text.strip():
+                logger.info("[Analyze] PDF text extracted with pypdf fallback")
+                profile = {
+                    "resolution": {"width": 0, "height": 0, "aspectRatio": 0},
+                    "dominantColors": [],
+                    "brightness": 0,
+                    "edgeDensity": 0,
+                    "textDensity": 0,
+                    "imageHash": binary_hash(path),
+                    "qrData": "",
+                    "ocrText": extracted_pdf_text[:8000],
+                    "ocrConfidence": 70.0,
+                }
+                pdf_converted = False
+            else:
+                logger.warning("[Analyze] PDF text extraction returned empty text")
+                return JSONResponse(status_code=503, content=make_serializable({
+                    "success": False,
+                    "error": "PDF processing failed",
+                    "type": "PDF_TEXT_EXTRACTION_EMPTY",
+                    "details": "The PDF could not be rendered or text-extracted. Please ensure the file is a valid PDF.",
+                }))
 
-            if not config.POPPLER_PATH or not Path(config.POPPLER_PATH).exists():
-                logger.error("[Analyze] Poppler not configured or missing")
-                return JSONResponse(status_code=503, content=make_serializable({"success": False, "error": "Poppler not configured", "type": "PDF_POPPLER_MISSING", "details": "Set POPPLER_PATH in config to Poppler binaries"}))
-
+        # Extract profile from image unless we already built one from the PDF text fallback
+        if profile is None:
             try:
-                logger.info(f"[Analyze] Converting PDF to images...")
-                images = convert_from_path(path, poppler_path=config.POPPLER_PATH)
-                if not images:
-                    raise ValueError("PDF conversion produced no images")
-
-                # Use first page
-                path_temp = Path(tempfile.gettempdir()) / f"page_{path.stem}.png"
-                images[0].save(path_temp, "PNG")
-                path = path_temp
-                pdf_converted = True
-                logger.info(f"[Analyze] PDF converted, using page 1")
+                profile = extract_image_profile(path)
             except Exception as e:
-                logger.error(f"[Analyze] PDF conversion failed: {e}", exc_info=True)
-                return JSONResponse(status_code=500, content=make_serializable({"success": False, "error": "PDF conversion failed", "type": "PDF_CONVERSION_ERROR", "details": str(e)}))
-
-        # Extract profile
-        try:
-            profile = extract_image_profile(path)
-        except Exception as e:
-            logger.error(f"[Analyze] Image profile extraction failed: {e}", exc_info=True)
-            return JSONResponse(status_code=500, content=make_serializable({"success": False, "error": "Image profile extraction failed", "type": "IMAGE_EXTRACTION_ERROR", "details": str(e)}))
+                logger.error(f"[Analyze] Image profile extraction failed: {e}", exc_info=True)
+                return JSONResponse(status_code=500, content=make_serializable({"success": False, "error": "Image profile extraction failed", "type": "IMAGE_EXTRACTION_ERROR", "details": str(e)}))
 
         # Extract certificate ID
         extracted_id = extract_certificate_id(profile.get("ocrText", ""), certificate_id)
@@ -904,6 +935,9 @@ async def analyze(
         else:
             verification_status = "REJECTED"
 
+        ocr_attempted = bool(run_ocr and file and file.filename)
+        ocr_success = bool(profile.get("ocrText"))
+
         data = {
             **risk,
             "verificationStatus": verification_status,
@@ -928,7 +962,8 @@ async def analyze(
                 "sizeBytes": size_bytes,
                 "mime": file.content_type,
                 "pdfConverted": pdf_converted,
-                "ocrAttempted": bool(profile.get("ocrText")),
+                "ocrAttempted": ocr_attempted,
+                "ocrSuccess": ocr_success,
             }
         }
 
@@ -1121,14 +1156,14 @@ async def list_templates() -> dict[str, Any]:
             return {
                 "count": len(templates),
                 "templates": [
-                    {
+                    make_serializable({
                         "id": str(t.get("_id")),
                         "certificationId": t.get("certificationId"),
                         "version": t.get("version"),
                         "trainedSamples": t.get("metadata", {}).get("trainedSamples"),
                         "trainingQuality": t.get("metadata", {}).get("trainingQuality"),
                         "trainedAt": t.get("metadata", {}).get("trainedAt"),
-                    }
+                    })
                     for t in templates
                 ],
             }
@@ -1184,12 +1219,12 @@ async def get_template(template_id: str) -> dict[str, Any]:
             # Return raw template data for compatibility
             return {
                 "id": str(template["_id"]),
-                "extractedProfile": template.get("extractedProfile", {}),
-                "components": [{"_id": None, **c} for c in components],
-                "relationships": relationships,
-                "hashes": hashes,
-                "thresholds": template.get("thresholds", {}),
-                "metadata": template.get("metadata", {}),
+                "extractedProfile": make_serializable(template.get("extractedProfile", {})),
+                "components": make_serializable([{ "_id": None, **c } for c in components]),
+                "relationships": make_serializable(relationships),
+                "hashes": make_serializable(hashes),
+                "thresholds": make_serializable(template.get("thresholds", {})),
+                "metadata": make_serializable(template.get("metadata", {})),
             }
         finally:
             db.disconnect()
