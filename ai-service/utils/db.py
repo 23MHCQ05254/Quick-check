@@ -63,7 +63,10 @@ class MongoDBManager:
                 self.db.create_collection(coll_name)
             collection = self.db[coll_name]
             for field, direction in indexes:
-                collection.create_index([(field, direction)])
+                try:
+                    collection.create_index([(field, direction)])
+                except Exception as e:
+                    logger.warning(f"[MongoDB] Failed to create index on {coll_name}.{field}: {e}")
 
     def upsert_organization(self, name: str, slug: str, category: str, **metadata) -> str:
         """Upsert organization document."""

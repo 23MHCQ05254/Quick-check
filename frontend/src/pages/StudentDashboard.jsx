@@ -14,47 +14,42 @@ import { Link } from 'react-router-dom';
 
 export default function StudentDashboard() {
   const { user } = useAuth();
-  const { data, loading } = useAsync(async () => (await api.get('/certificates/mine')).data.items, []);
-  const certificates = data || [];
-  
-  // Real readiness: based only on actual verified certificates
-  // NO fake defaults, NO fake progression
+  const { data: stats, loading: statsLoading } = useAsync(
+    async () => (await api.get('/certificates/dashboard-stats')).data,
+    []
+  );
+  const { data: certificates, loading: certsLoading } = useAsync(
+    async () => (await api.get('/certificates/mine')).data.items,
+    []
+  );
+
+  const certs = certificates || [];
+  const loading = statsLoading || certsLoading;
+
+  // Use real data from dashboard-stats endpoint
+  const totalCerts = stats?.totalCertificates || 0;
+  const verified = stats?.acceptedCount || 0;
+  const rejected = stats?.rejectedCount || 0;
+  const avgFraud = stats?.averageFraud || 0;
+  const readiness = stats?.readiness || 0;
+  const uploadTrend = stats?.uploadTrend || [];
+
   const readinessData = useMemo(() => {
-    if (certificates.length === 0) {
-      return [
-        { month: 'Jan', score: 0 },
-        { month: 'Feb', score: 0 },
-        { month: 'Mar', score: 0 },
-        { month: 'Apr', score: 0 },
-        { month: 'May', score: 0 }
-      ];
+    // If we have real trend data, use it
+    if (uploadTrend.length > 0) {
+      return uploadTrend;
     }
-    
-    // Group by month
-    const buckets = ['Jan', 'Feb', 'Mar', 'Apr', 'May'];
-    return buckets.map((month) => {
-      const monthCerts = certificates.filter((cert) => {
-        const date = cert.createdAt || cert.issueDate;
-        return date ? new Date(date).toLocaleString('en-US', { month: 'short' }) === month : false;
-      });
-      
-      // REAL score: percentage of this month's certs that are verified
-      const verifiedCount = monthCerts.filter((c) => c.status === 'VERIFIED').length;
-      const score = monthCerts.length > 0 ? Math.round((verifiedCount / monthCerts.length) * 100) : 0;
-      return { month, score };
-    });
-  }, [certificates]);
-  
-  const verified = certificates.filter((item) => item.status === 'VERIFIED').length;
-  const review = certificates.filter((item) => item.status === 'REVIEW_REQUIRED').length;
-  const avgFraud = certificates.length
-    ? Math.round(certificates.reduce((sum, item) => sum + (item.analysis?.fraudProbability || 0), 0) / certificates.length)
-    : 0;
-  
-  // Real readiness: only if explicitly set on user object
-  // Don't show default 38% if not actually calculated
-  const placementReadiness = user.placementReadiness !== undefined && user.placementReadiness !== null ? user.placementReadiness : null;
-  const skillScore = user.skillScore !== undefined && user.skillScore !== null ? user.skillScore : null;
+    // Otherwise show empty state
+    return [
+      { month: 'Jan', score: 0 },
+      { month: 'Feb', score: 0 },
+      { month: 'Mar', score: 0 },
+      { month: 'Apr', score: 0 },
+      { month: 'May', score: 0 }
+    ];
+  }, [uploadTrend]);
+
+  const review = certs.filter((item) => item.status === 'REVIEW_REQUIRED').length;
 
   return (
     <div className="space-y-6">
@@ -73,23 +68,23 @@ export default function StudentDashboard() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Certificates" value={certificates.length} detail={`${verified} verified by mentors`} icon={Award} accent="cyan" />
+        <MetricCard label="Certificates" value={totalCerts} detail={`${verified} verified, ${rejected} rejected`} icon={Award} accent="cyan" />
         <MetricCard label="Fraud Avg" value={avgFraud > 0 ? `${avgFraud}%` : '—'} detail="AI-assisted probability, not a final verdict" icon={ShieldAlert} accent="rose" delay={0.05} />
-        <MetricCard 
-          label="Skill Score" 
-          value={skillScore !== null ? skillScore : '—'} 
-          detail={skillScore !== null ? 'Based on verified organizations and skills' : 'No data yet'} 
-          icon={BadgeCheck} 
-          accent="green" 
-          delay={0.1} 
+        <MetricCard
+          label="Skill Score"
+          value={user.skillScore !== undefined ? user.skillScore : '—'}
+          detail={user.skillScore !== undefined ? 'Based on verified organizations and skills' : 'No data yet'}
+          icon={BadgeCheck}
+          accent="green"
+          delay={0.1}
         />
-        <MetricCard 
-          label="Readiness" 
-          value={placementReadiness !== null ? `${placementReadiness}%` : '—'} 
-          detail={review > 0 ? `${review} item waiting for review` : 'No pending items'} 
-          icon={BriefcaseBusiness} 
-          accent="amber" 
-          delay={0.15} 
+        <MetricCard
+          label="Readiness"
+          value={`${readiness}%`}
+          detail={review > 0 ? `${review} item waiting for review` : 'No pending items'}
+          icon={BriefcaseBusiness}
+          accent="amber"
+          delay={0.15}
         />
       </div>
 
@@ -102,19 +97,25 @@ export default function StudentDashboard() {
             </div>
           </div>
           <div className="mt-6 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={readinessData}>
-                <defs>
-                  <linearGradient id="readiness" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#37E6A0" stopOpacity={0.42} />
-                    <stop offset="100%" stopColor="#37E6A0" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                <Tooltip contentStyle={{ borderRadius: 16, border: '1px solid rgba(148,163,184,.25)' }} />
-                <Area type="monotone" dataKey="score" stroke="#37E6A0" strokeWidth={3} fill="url(#readiness)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {!loading && uploadTrend.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={readinessData}>
+                  <defs>
+                    <linearGradient id="readiness" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#37E6A0" stopOpacity={0.42} />
+                      <stop offset="100%" stopColor="#37E6A0" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <Tooltip contentStyle={{ borderRadius: 16, border: '1px solid rgba(148,163,184,.25)' }} />
+                  <Area type="monotone" dataKey="count" stroke="#37E6A0" strokeWidth={3} fill="url(#readiness)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+                {loading ? 'Loading data...' : 'No uploads yet'}
+              </div>
+            )}
           </div>
         </GlassPanel>
 
@@ -125,17 +126,11 @@ export default function StudentDashboard() {
             </div>
             <div>
               <p className="text-sm font-black text-slate-950 dark:text-white">Notifications</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{user.notifications?.length || 0} active</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">0 active</p>
             </div>
           </div>
           <div className="mt-5 space-y-3">
-            {(user.notifications || []).map((note) => (
-              <div key={note.title} className="rounded-2xl border border-slate-900/10 bg-white/55 p-4 dark:border-white/10 dark:bg-white/[0.04]">
-                <p className="text-sm font-bold text-slate-950 dark:text-white">{note.title}</p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{note.body}</p>
-              </div>
-            ))}
-            {!user.notifications?.length && <p className="text-sm text-slate-500 dark:text-slate-400">No unread notifications.</p>}
+            <p className="text-sm text-slate-500 dark:text-slate-400">No unread notifications.</p>
           </div>
         </GlassPanel>
       </div>

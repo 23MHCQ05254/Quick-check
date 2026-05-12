@@ -15,13 +15,64 @@ const statusFromAnalysis = (analysis, duplicate) => {
     throw new ApiError(500, 'Certificate analysis failed: AI service returned incomplete data');
   }
 
-  if (typeof analysis.fraudProbability === 'undefined' || analysis.fraudProbability === null) {
-    console.error('[certificates.upload] ERROR: Analysis missing fraudProbability field:', analysis);
-    throw new ApiError(500, 'Certificate analysis failed: Missing fraud probability score');
+  // Duplicate certificates are always rejected
+  if (duplicate) {
+    console.log('[certificates.upload] ✗ REJECTED: Duplicate certificate detected');
+    return 'REJECTED';
   }
 
-  if (duplicate || analysis.verificationStatus !== 'VERIFIED') return 'REJECTED';
-  return 'VERIFIED';
+  // Prefer explicit verificationStatus from AI service when provided
+  if (analysis.verificationStatus && typeof analysis.verificationStatus === 'string') {
+    const s = analysis.verificationStatus.toUpperCase();
+    if (['VERIFIED', 'NEEDS_REVIEW', 'REJECTED'].includes(s)) {
+      console.log(`[certificates.upload] AI Verdict from verificationStatus: ${s}`);
+      return s;
+    }
+  }
+
+  // Use trustScore / weightedConfidence if available (preferred)
+  const score = (typeof analysis.trustScore !== 'undefined' && analysis.trustScore !== null)
+    ? Number(analysis.trustScore)
+    : (typeof analysis.weightedConfidence !== 'undefined' && analysis.weightedConfidence !== null)
+    ? Number(analysis.weightedConfidence)
+    : (typeof analysis.confidence !== 'undefined' && analysis.confidence !== null)
+    ? Number(analysis.confidence)
+    : null;
+
+  if (score === null || Number.isNaN(score)) {
+    console.warn('[certificates.upload] WARNING: No numeric score available in analysis, defaulting to NEEDS_REVIEW');
+    return 'NEEDS_REVIEW';
+  }
+
+  console.log(`[certificates.upload] AI Verdict: score=${score}, fraudProbability=${analysis.fraudProbability || 'N/A'}`);
+
+  // Threshold bands (spec): >=75 VERIFIED, 55-74 NEEDS_REVIEW, <55 REJECTED
+  if (score >= 75) {
+    console.log('[certificates.upload] ✓ VERIFIED: score >= 75');
+    return 'VERIFIED';
+  }
+
+  if (score >= 55) {
+    console.log('[certificates.upload] ~ NEEDS_REVIEW: 55 <= score < 75');
+    return 'NEEDS_REVIEW';
+  }
+
+  console.log('[certificates.upload] ✗ REJECTED: score < 55');
+  // Safety: if visual similarity is high but OCR/name checks failed (common OCR failures),
+  // avoid auto-rejecting genuine certificates — send to human review instead.
+  try {
+    const visual = Number(analysis.visualSimilarity || 0);
+    const anomalies = (analysis.anomalies || []).map(a => (a.type || '').toUpperCase());
+    const hasOcrFailure = anomalies.includes('OCR_FAILURE') || anomalies.includes('NO_TEMPLATE') || anomalies.includes('NAME_MISMATCH');
+    if (visual >= 70 && hasOcrFailure) {
+      console.log('[certificates.upload] Downgrading REJECT => NEEDS_REVIEW due to high visual similarity + OCR/name anomalies');
+      return 'NEEDS_REVIEW';
+    }
+  } catch (e) {
+    // ignore and proceed to reject
+  }
+
+  return 'REJECTED';
 };
 
 export const uploadCertificate = asyncHandler(async (req, res) => {
@@ -227,5 +278,92 @@ export const listMyCertificates = asyncHandler(async (req, res) => {
     .populate(['certification', 'organization'])
     .sort({ createdAt: -1 });
   res.json({ items });
+});
+
+/**
+ * Get student dashboard stats - REAL DATA from database
+ * - Total certificates
+ * - Accepted/Rejected counts
+ * - Average fraud probability
+ * - Readiness calculation
+ */
+export const getStudentDashboardStats = asyncHandler(async (req, res) => {
+  const userId = req.user.id || req.user._id;
+
+  if (isDemoMode()) {
+    const certs = await demoStore.listCertificatesForStudent(userId);
+    const verified = certs.filter(c => c.status === 'VERIFIED').length;
+    const rejected = certs.filter(c => c.status === 'REJECTED').length;
+    const avgFraud = certs.length
+      ? Math.round(certs.reduce((sum, c) => sum + (c.analysis?.fraudProbability || 0), 0) / certs.length)
+      : 0;
+
+    const readiness = certs.length === 0 ? 0 : Math.round((verified / certs.length) * 100);
+    const uploadTrend = certs.slice(0, 5).reverse().map(c => ({
+      month: new Date(c.createdAt).toLocaleString('en-US', { month: 'short' }),
+      count: 1
+    }));
+
+    res.json({
+      totalCertificates: certs.length,
+      acceptedCount: verified,
+      rejectedCount: rejected,
+      averageFraud: avgFraud,
+      readiness,
+      uploadTrend,
+      certificationTypes: {}
+    });
+    return;
+  }
+
+  const certs = await Certificate.find({
+    $or: [{ student: userId }, { studentId: userId }, { userId }, { uploadedBy: userId }]
+  }).populate('certification');
+
+  const verified = certs.filter(c => c.status === 'VERIFIED').length;
+  const rejected = certs.filter(c => c.status === 'REJECTED').length;
+  const avgFraud = certs.length
+    ? Math.round(certs.reduce((sum, c) => sum + (c.analysis?.fraudProbability || 0), 0) / certs.length)
+    : 0;
+
+  // Readiness: percentage of verified vs total (real calculation)
+  const readiness = certs.length === 0 ? 0 : Math.round((verified / certs.length) * 100);
+
+  // Group by certification type
+  const certsByType = {};
+  certs.forEach(c => {
+    const type = c.certification?.name || 'Unknown';
+    if (!certsByType[type]) {
+      certsByType[type] = { total: 0, accepted: 0, rejected: 0 };
+    }
+    certsByType[type].total += 1;
+    if (c.status === 'VERIFIED') certsByType[type].accepted += 1;
+    if (c.status === 'REJECTED') certsByType[type].rejected += 1;
+  });
+
+  // Upload trend - last 5 months
+  const monthBuckets = {};
+  certs.forEach(c => {
+    const date = c.createdAt ? new Date(c.createdAt) : new Date();
+    const monthKey = date.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+    monthBuckets[monthKey] = (monthBuckets[monthKey] || 0) + 1;
+  });
+
+  const uploadTrend = Object.entries(monthBuckets).map(([month, count]) => ({
+    month,
+    count
+  }));
+
+  console.log(`[dashboard-stats] Student ${userId}: ${certs.length} total, ${verified} verified, readiness=${readiness}%`);
+
+  res.json({
+    totalCertificates: certs.length,
+    acceptedCount: verified,
+    rejectedCount: rejected,
+    averageFraud: avgFraud,
+    readiness,
+    uploadTrend,
+    certificationTypes: certsByType
+  });
 });
 

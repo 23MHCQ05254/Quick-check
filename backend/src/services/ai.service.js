@@ -43,11 +43,20 @@ export const analyzeCertificateWithAi = async (payload) => {
     form.append('organization', payload.organizationName || '');
     form.append('template_profile', JSON.stringify(payload.templateProfile || {}));
 
-    const { data } = await axios.post(`${aiUrl}/analyze`, form, {
+    const { data: rawData } = await axios.post(`${aiUrl}/analyze`, form, {
       headers: form.getHeaders(),
       timeout: 30000,
       maxBodyLength: Infinity
     });
+
+    // Adapter: accept several response shapes (raw, wrapped, legacy)
+    let data = rawData;
+    // common wrapper: { success: true, data: { ... } }
+    if (data && data.success && data.data) data = data.data;
+    // alternate wrapper used previously: { success_response: { ... } }
+    if (data && data.success_response) data = data.success_response;
+    // some endpoints return { result: {...} }
+    if (data && data.result) data = data.result;
 
     // Ensure real analysis data is returned
     if (!data || data.error === 'REAL_ANALYSIS_REQUIRED') {

@@ -20,23 +20,44 @@ import argparse
 import logging
 import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
-from pdf2image import convert_from_path
-from slugify import slugify
+from dotenv import load_dotenv
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Load environment variables
+env_file = Path(__file__).parent.parent / ".env"
+if env_file.exists():
+    load_dotenv(env_file)
 
 from utils.db import MongoDBManager
 from utils.template_aggregator import TemplateAggregator
 from utils.template_extractor import TemplateExtractor
 
+# Try to import pdf2image
+try:
+    from pdf2image import convert_from_path
+except ImportError:
+    convert_from_path = None
+
+# Try to import python-slugify
+try:
+    from slugify import slugify
+except ImportError:
+    def slugify(text: str, lowercase: bool = True, separator: str = "-") -> str:
+        """Fallback slugify implementation."""
+        text = text.lower() if lowercase else text
+        text = "".join(c if c.isalnum() else separator for c in text)
+        return separator.join(filter(None, text.split(separator)))
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format="[%(levelname)s] %(message)s",
+    format="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -252,13 +273,23 @@ class TemplateSeeder:
     def _prepare_images(self, file_path: Path) -> list[Path]:
         """Convert file to image(s), handling PDFs specially."""
         if file_path.suffix.lower() == ".pdf":
+            if not convert_from_path:
+                logger.error(f"PDF conversion not available (pdf2image not installed)")
+                return []
+
             try:
+                logger.info(f"      Converting PDF to images...")
                 images = convert_from_path(str(file_path), dpi=150)
                 temp_images = []
+                
                 for i, image in enumerate(images):
-                    temp_path = Path(f"/tmp/cert_temp_{file_path.stem}_{i}.png")
+                    # Use Windows-compatible temp directory
+                    temp_dir = Path(tempfile.gettempdir())
+                    temp_path = temp_dir / f"cert_temp_{file_path.stem}_{i}.png"
                     image.save(temp_path, "PNG")
                     temp_images.append(temp_path)
+                    logger.info(f"      Converted page {i+1} to {temp_path}")
+                
                 return temp_images
             except Exception as e:
                 logger.error(f"PDF conversion failed: {e}")

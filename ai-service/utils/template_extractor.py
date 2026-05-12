@@ -155,27 +155,55 @@ class TemplateExtractor:
                     # Component detection
                     profile["components"] = self._detect_components(image, array)
 
+                    # Run edit detection heuristics
+                    try:
+                        from .edit_detector import detect_edits
+
+                        edits = detect_edits(image)
+                        profile["editIndicators"] = edits.get("indicators", [])
+                        profile["editAnomalies"] = edits.get("anomalies", [])
+                        profile["editDetails"] = edits.get("details", {})
+                    except Exception as e:
+                        logger.warning(f"Edit detector integration failed: {e}")
+
+                    # Quality signals: blur (variance of Laplacian), contrast
+                    try:
+                        lap = cv2.Laplacian(array, cv2.CV_64F)
+                        var_lap = float(lap.var())
+                        profile["blurScore"] = round(max(0.0, min(100.0, var_lap)), 2)
+                    except Exception:
+                        profile["blurScore"] = 0.0
+
+                    try:
+                        # Contrast as (max-min)/max * 100
+                        minv = float(array.min())
+                        maxv = float(array.max())
+                        profile["contrast"] = round(((maxv - minv) / max(1.0, maxv)) * 100.0, 2)
+                    except Exception:
+                        profile["contrast"] = 0.0
+
+                    # Rotation detection (simple heuristic via aspect ratio difference)
+                    try:
+                        w, h = image.size
+                        profile["isLikelyRotated"] = True if abs((w / max(1, h)) - profile["resolution"].get("aspectRatio", 0)) > 0.5 else False
+                    except Exception:
+                        profile["isLikelyRotated"] = False
+
         except Exception as e:
             logger.warning(f"Failed to extract profile from {path}: {e}")
 
         return profile
 
     def _extract_ocr_text(self, image: Image.Image) -> str:
-        """Extract OCR text using available engines."""
+        """Extract OCR text using the shared OCR pipeline (preprocessing + fallback)."""
         try:
-            if self.reader:
-                results = self.reader.readtext(np.array(image))
-                return "\n".join([text[1] for text in results if text[1]])
+            from .ocr_pipeline import run_ocr
+
+            text, conf = run_ocr(image)
+            return (text or "")[:8000]
         except Exception as e:
-            logger.warning(f"EasyOCR extraction failed: {e}")
-
-        if pytesseract:
-            try:
-                return pytesseract.image_to_string(image)[:8000]
-            except Exception as e:
-                logger.warning(f"Tesseract extraction failed: {e}")
-
-        return ""
+            logger.warning(f"OCR pipeline failed: {e}")
+            return ""
 
     def _detect_components(self, image: Image.Image, gray: np.ndarray) -> list[dict[str, Any]]:
         """Dynamically detect certificate components."""

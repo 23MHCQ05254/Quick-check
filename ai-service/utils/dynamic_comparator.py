@@ -39,6 +39,13 @@ try:
     import imagehash
 except Exception:
     imagehash = None
+try:
+    from .scoring_engine import evaluate as scoring_evaluate
+except Exception:
+    try:
+        from utils.scoring_engine import evaluate as scoring_evaluate
+    except Exception:
+        scoring_evaluate = None
 
 
 class DynamicComparator:
@@ -127,18 +134,36 @@ class DynamicComparator:
         # Detect anomalies
         anomalies = self._detect_anomalies(uploaded_profile, metrics)
 
-        # Calculate fraud probability from actual metrics
+        # Delegate to scoring engine for weighted, explainable scoring
+        try:
+            eval_result = scoring_evaluate(
+                metrics=metrics,
+                uploaded_profile={**uploaded_profile, "anomalies": anomalies},
+                certificate_id_provided=certificate_id,
+                name_score=metrics.get("nameSimilarity", 0),
+                template=self.template,
+            ) if scoring_evaluate else None
+        except Exception:
+            eval_result = None
+
+        if eval_result:
+            classification = eval_result.get("classification", "REJECTED")
+            recommendation = "ACCEPT" if classification == "VERIFIED" else ("REVIEW" if classification == "NEEDS_REVIEW" else "REJECT")
+
+            return {
+                "fraudProbability": round(100 - eval_result.get("trustScore", 0), 2),
+                "confidence": round(eval_result.get("weightedConfidence", 0), 2),
+                "metrics": {k: round(v, 2) for k, v in metrics.items()},
+                "anomalies": anomalies,
+                "explanations": eval_result.get("explanation", []),
+                "recommendation": recommendation,
+                "explainable": eval_result,
+            }
+
+        # Fallback: previous calculation if scoring engine unavailable
         fraud_probability = self._calculate_fraud(metrics, anomalies)
-
-        # Calculate analysis confidence
         confidence = self._calculate_confidence(metrics, uploaded_profile)
-
-        # Generate explanations
-        explanations = self._generate_explanations(
-            metrics, anomalies, student_name, certificate_id
-        )
-
-        # Determine recommendation
+        explanations = self._generate_explanations(metrics, anomalies, student_name, certificate_id)
         recommendation = self._recommend_action(confidence, anomalies)
 
         return {
@@ -658,10 +683,11 @@ class DynamicComparator:
     ) -> str:
         """
         Determine recommendation based on confidence level.
-
-        New logic: confidence >= 95 => ACCEPT, else REJECT
+        New logic: >=75 VERIFIED (ACCEPT), 55-74 REVIEW, <55 REJECT
         """
-        if confidence >= 95:
+        if confidence >= 75:
             return "ACCEPT"
+        elif confidence >= 55:
+            return "REVIEW"
         else:
             return "REJECT"

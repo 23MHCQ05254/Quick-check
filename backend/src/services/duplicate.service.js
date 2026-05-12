@@ -151,7 +151,12 @@ export const detectDuplicateCertificate = async ({ analysis, uploadedCertificate
   if (!analysis) return null;
 
   if (isDemoMode()) {
-    const candidates = demoStore.certificates.filter((cert) => cert.organization === organizationId && cert.certification === certificationId);
+    // ONLY check against ACCEPTED (VERIFIED) certificates
+    const candidates = demoStore.certificates.filter((cert) =>
+      cert.organization === organizationId &&
+      cert.certification === certificationId &&
+      cert.status === 'VERIFIED'  // Only VERIFIED certs can match for duplicate
+    );
     let bestMatch = null;
 
     candidates.forEach((cert) => {
@@ -167,7 +172,8 @@ export const detectDuplicateCertificate = async ({ analysis, uploadedCertificate
   try {
     const query = {
       organization: organizationId,
-      certification: certificationId
+      certification: certificationId,
+      status: 'VERIFIED'  // CRITICAL: Only VERIFIED certificates participate in duplicate detection
     };
 
     if (studentId) {
@@ -190,6 +196,7 @@ export const detectDuplicateCertificate = async ({ analysis, uploadedCertificate
       }
     }
 
+    console.log(`[duplicate-detection] Checked ${candidates.length} VERIFIED certificates, best match: ${bestMatch?.duplicateProbability || 0}%`);
     return bestMatch && bestMatch.duplicateProbability >= 90 ? bestMatch : null;
   } catch (error) {
     console.error('[duplicate-detection] Similarity-based duplicate check failed:', error.message);
