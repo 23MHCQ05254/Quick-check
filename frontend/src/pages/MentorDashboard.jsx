@@ -62,7 +62,6 @@ export default function MentorDashboard() {
 
   const summary = data?.summary || {};
   const reviewQueue = data?.reviewQueue || [];
-  const riskLeaders = data?.riskLeaders || [];
   const riskDistribution = data?.riskDistribution || ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((level) => ({ level, count: 0 }));
 
   return (
@@ -93,7 +92,7 @@ export default function MentorDashboard() {
 
       {error && <GlassPanel className="p-4 text-sm font-semibold text-rose-600 dark:text-rose-300">{error}</GlassPanel>}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard label="Students" value={summary.students || 0} detail="Tracked learners" icon={UsersRound} accent="cyan" />
         <MetricCard label="Uploads" value={summary.total || 0} detail={`${summary.PENDING || 0} pending`} icon={ClipboardCheck} accent="green" delay={0.04} />
         <MetricCard label="Verified" value={summary.VERIFIED || 0} detail="Mentor accepted" icon={BadgeCheck} accent="green" delay={0.08} />
@@ -101,8 +100,8 @@ export default function MentorDashboard() {
         <MetricCard label="Avg Risk" value={`${summary.avgFraud || 0}%`} detail="AI probability" icon={AlertTriangle} accent="rose" delay={0.16} />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-        <GlassPanel className="p-5">
+      <div className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <GlassPanel className="min-w-0 p-5">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
               <p className="text-sm font-black text-slate-950 dark:text-white">Fraud and upload trends</p>
@@ -113,12 +112,12 @@ export default function MentorDashboard() {
               Monitoring active
             </span>
           </div>
-          <div className="mt-6 h-80">
+          <div className="mt-5 h-[300px] min-h-[260px] w-full overflow-hidden">
             {loading ? (
               <Skeleton className="h-full" />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data?.fraudTrends || []}>
+              <ResponsiveContainer width="100%" height="100%" debounce={80}>
+                <AreaChart data={data?.fraudTrends || []} margin={{ top: 12, right: 12, left: -16, bottom: 0 }}>
                   <defs>
                     <linearGradient id="uploads" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#38D5FF" stopOpacity={0.36} />
@@ -130,29 +129,30 @@ export default function MentorDashboard() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.16)" vertical={false} />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={18} tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <YAxis yAxisId="uploads" axisLine={false} tickLine={false} width={42} domain={[0, 'dataMax + 5']} allowDecimals={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <YAxis yAxisId="risk" orientation="right" axisLine={false} tickLine={false} width={38} domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 12 }} />
                   <Tooltip contentStyle={{ borderRadius: 16, border: '1px solid rgba(148,163,184,.25)' }} />
-                  <Area type="monotone" dataKey="uploads" stroke="#38D5FF" strokeWidth={3} fill="url(#uploads)" />
-                  <Area type="monotone" dataKey="avgRisk" stroke="#FF6B8A" strokeWidth={3} fill="url(#risk)" />
+                  <Area yAxisId="uploads" type="monotone" dataKey="uploads" stroke="#38D5FF" strokeWidth={2.5} fill="url(#uploads)" dot={false} activeDot={{ r: 4 }} />
+                  <Area yAxisId="risk" type="monotone" dataKey="avgRisk" stroke="#FF6B8A" strokeWidth={2.5} fill="url(#risk)" dot={false} activeDot={{ r: 4 }} />
                 </AreaChart>
               </ResponsiveContainer>
             )}
           </div>
         </GlassPanel>
 
-        <GlassPanel className="p-5">
+        <GlassPanel className="flex min-w-0 flex-col p-5">
           <p className="text-sm font-black text-slate-950 dark:text-white">AI risk posture</p>
-          <div className="mt-5 flex justify-center">
-            <CircularScore value={summary.avgFraud || 0} label="Avg Risk" tone={(summary.avgFraud || 0) >= 65 ? 'rose' : (summary.avgFraud || 0) >= 35 ? 'amber' : 'green'} />
+          <div className="mt-4 flex justify-center">
+            <CircularScore value={summary.avgFraud || 0} label="Avg Risk" tone={(summary.avgFraud || 0) >= 65 ? 'rose' : (summary.avgFraud || 0) >= 35 ? 'amber' : 'green'} size={124} />
           </div>
-          <div className="mt-5 h-44">
+          <div className="mt-4 h-[150px] w-full overflow-hidden">
             {loading ? (
               <Skeleton className="h-full" />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" debounce={80}>
                 <PieChart>
-                  <Pie data={riskDistribution} dataKey="count" nameKey="level" innerRadius={46} outerRadius={72} paddingAngle={3}>
+                  <Pie data={riskDistribution} dataKey="count" nameKey="level" innerRadius={42} outerRadius={64} paddingAngle={3} cx="50%" cy="50%">
                     {riskDistribution.map((entry) => (
                       <Cell key={entry.level} fill={riskColors[entry.level]} />
                     ))}
@@ -165,8 +165,8 @@ export default function MentorDashboard() {
         </GlassPanel>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
-        <GlassPanel className="p-5">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <GlassPanel className="min-w-0 p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-500/10 text-cyber-amber">
@@ -210,7 +210,7 @@ export default function MentorDashboard() {
           </div>
         </GlassPanel>
 
-        <GlassPanel className="p-5">
+        <GlassPanel className="min-w-0 p-5">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-2xl bg-cyan-500/10 text-cyber-cyan">
               <Bell size={18} />
@@ -226,29 +226,29 @@ export default function MentorDashboard() {
         </GlassPanel>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
-        <GlassPanel className="p-5">
+      <div className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <GlassPanel className="min-w-0 p-5">
           <p className="text-sm font-black text-slate-950 dark:text-white">Department readiness analytics</p>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Placement intelligence by department.</p>
-          <div className="mt-6 h-72">
+          <div className="mt-5 h-[280px] min-h-[240px] w-full overflow-hidden">
             {loading ? (
               <Skeleton className="h-full" />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data?.departmentStats || []}>
+              <ResponsiveContainer width="100%" height="100%" debounce={80}>
+                <BarChart data={data?.departmentStats || []} margin={{ top: 12, right: 8, left: -12, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.16)" vertical={false} />
-                  <XAxis dataKey="department" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <XAxis dataKey="department" axisLine={false} tickLine={false} interval={0} minTickGap={8} tick={{ fill: '#64748b', fontSize: 11 }} />
+                  <YAxis axisLine={false} tickLine={false} width={42} domain={[0, 100]} allowDecimals={false} tick={{ fill: '#64748b', fontSize: 12 }} />
                   <Tooltip contentStyle={{ borderRadius: 16, border: '1px solid rgba(148,163,184,.25)' }} />
-                  <Bar dataKey="avgReadiness" fill="#37E6A0" radius={[8, 8, 0, 0]} />
-                  <Bar dataKey="avgRisk" fill="#FF6B8A" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="avgReadiness" fill="#37E6A0" radius={[6, 6, 0, 0]} maxBarSize={34} />
+                  <Bar dataKey="avgRisk" fill="#FF6B8A" radius={[6, 6, 0, 0]} maxBarSize={34} />
                 </BarChart>
               </ResponsiveContainer>
             )}
           </div>
         </GlassPanel>
 
-        <GlassPanel className="p-5">
+        <GlassPanel className="min-w-0 p-5">
           <p className="text-sm font-black text-slate-950 dark:text-white">Institutional activity</p>
           <div className="mt-5 max-h-[360px] overflow-auto pr-1">
             {loading ? <Skeleton className="h-32" /> : <ActivityFeed items={data?.activity || []} />}

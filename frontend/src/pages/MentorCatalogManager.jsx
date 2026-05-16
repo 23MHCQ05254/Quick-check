@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Archive, BadgeCheck, Building2, Edit3, Plus, RotateCcw, Save, Search, ShieldCheck, Trash2 } from 'lucide-react';
+import { Archive, BadgeCheck, Building2, Edit3, Info, RotateCcw, Save, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../components/common/Button.jsx';
 import { GlassPanel } from '../components/common/GlassPanel.jsx';
@@ -13,6 +13,7 @@ import { useCatalog } from '../hooks/useCatalog.js';
 const categories = Object.keys(CATEGORY_LABELS);
 const difficulties = Object.keys(DIFFICULTY_LABELS);
 const verificationTypes = Object.keys(VERIFICATION_LABELS);
+const futureTooltip = 'Planned for future implementation';
 
 const emptyOrg = { name: '', description: '', category: 'OTHER', website: '', brandColor: '#38D5FF' };
 const emptyCert = {
@@ -50,6 +51,8 @@ export default function MentorCatalogManager() {
 
   const submitOrganization = async (event) => {
     event.preventDefault();
+    setMessage(futureTooltip);
+    return;
     setSaving(true);
     setMessage('');
     try {
@@ -73,6 +76,8 @@ export default function MentorCatalogManager() {
 
   const submitCertification = async (event) => {
     event.preventDefault();
+    setMessage(futureTooltip);
+    return;
     setSaving(true);
     setMessage('');
     const payload = {
@@ -103,6 +108,8 @@ export default function MentorCatalogManager() {
   };
 
   const editCertification = (certification) => {
+    setMessage(futureTooltip);
+    return;
     setEditingCert(certification);
     setCertForm({
       organizationId: certification.organization?._id || certification.organization?.id || certification.organization,
@@ -117,6 +124,8 @@ export default function MentorCatalogManager() {
   };
 
   const editOrganization = (organization) => {
+    setMessage(futureTooltip);
+    return;
     setEditingOrg(organization);
     setOrgForm({
       name: organization.name || '',
@@ -128,6 +137,8 @@ export default function MentorCatalogManager() {
   };
 
   const deleteCertification = async (certification) => {
+    setMessage(futureTooltip);
+    return;
     await api.delete(`/catalog/mentor/certifications/${certification._id || certification.id}`);
     setMessage('Certification archived.');
     await catalog.reload();
@@ -135,6 +146,8 @@ export default function MentorCatalogManager() {
   };
 
   const deleteOrganization = async (organization) => {
+    setMessage(futureTooltip);
+    return;
     await api.delete(`/catalog/mentor/organizations/${organization._id || organization.id}`);
     setMessage('Organization archived with its certifications.');
     await catalog.reload();
@@ -146,7 +159,12 @@ export default function MentorCatalogManager() {
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
           <p className="text-sm font-semibold text-cyber-green">Mentor catalog management</p>
-          <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">Certification intelligence registry</h2>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <h2 className="text-3xl font-black text-slate-950 dark:text-white">Certification intelligence registry</h2>
+            <span className="rounded-full bg-rose-500 px-3 py-1 text-xs font-black uppercase tracking-normal text-white">
+              Future Implementation
+            </span>
+          </div>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
             Manage the certification catalog that students must select from before certificates are analyzed against template profiles.
           </p>
@@ -167,6 +185,20 @@ export default function MentorCatalogManager() {
 
       {message && <GlassPanel className="p-4 text-sm font-semibold text-cyan-700 dark:text-cyan-300">{message}</GlassPanel>}
 
+      <GlassPanel className="border-rose-500/30 bg-rose-500/10 p-4 dark:border-rose-400/25 dark:bg-rose-500/10">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-rose-500/15 text-rose-500 dark:text-rose-300">
+            <Info size={18} />
+          </div>
+          <div>
+            <p className="text-sm font-black text-rose-700 dark:text-rose-200">Future implementation</p>
+            <p className="mt-1 text-sm leading-6 text-rose-700/80 dark:text-rose-100/80">
+              This module is reserved for future institutional catalog management features.
+            </p>
+          </div>
+        </div>
+      </GlassPanel>
+
       <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
         <div className="space-y-6">
           <GlassPanel className="p-5">
@@ -181,25 +213,25 @@ export default function MentorCatalogManager() {
                 </div>
               </div>
               {editingOrg && (
-                <button className="focus-ring rounded-xl p-2 text-slate-500 hover:bg-slate-900/5 dark:hover:bg-white/10" onClick={() => { setEditingOrg(null); setOrgForm(emptyOrg); }} aria-label="Cancel organization edit">
+                <button className="focus-ring rounded-xl p-2 text-slate-500 opacity-50 hover:bg-slate-900/5 dark:hover:bg-white/10" onClick={() => setMessage(futureTooltip)} aria-label="Cancel organization edit" title={futureTooltip}>
                   <RotateCcw size={16} />
                 </button>
               )}
             </div>
 
             <form className="mt-5 space-y-3" onSubmit={submitOrganization}>
-              <input className="field" placeholder="Organization name" value={orgForm.name} onChange={(event) => setOrgForm({ ...orgForm, name: event.target.value })} required />
-              <textarea className="field min-h-24 resize-none" placeholder="Description" value={orgForm.description} onChange={(event) => setOrgForm({ ...orgForm, description: event.target.value })} />
+              <input className="field opacity-60" placeholder="Organization name" value={orgForm.name} onChange={(event) => setOrgForm({ ...orgForm, name: event.target.value })} required disabled title={futureTooltip} />
+              <textarea className="field min-h-24 resize-none opacity-60" placeholder="Description" value={orgForm.description} onChange={(event) => setOrgForm({ ...orgForm, description: event.target.value })} disabled title={futureTooltip} />
               <div className="grid gap-3 sm:grid-cols-2">
-                <select className="field" value={orgForm.category} onChange={(event) => setOrgForm({ ...orgForm, category: event.target.value })}>
+                <select className="field opacity-60" value={orgForm.category} onChange={(event) => setOrgForm({ ...orgForm, category: event.target.value })} disabled title={futureTooltip}>
                   {categories.map((category) => (
                     <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>
                   ))}
                 </select>
-                <input className="field" type="color" title="Brand color" value={orgForm.brandColor} onChange={(event) => setOrgForm({ ...orgForm, brandColor: event.target.value })} />
+                <input className="field opacity-60" type="color" title={futureTooltip} value={orgForm.brandColor} onChange={(event) => setOrgForm({ ...orgForm, brandColor: event.target.value })} disabled />
               </div>
-              <input className="field" placeholder="Website" value={orgForm.website} onChange={(event) => setOrgForm({ ...orgForm, website: event.target.value })} />
-              <Button className="w-full" type="submit" disabled={saving}>
+              <input className="field opacity-60" placeholder="Website" value={orgForm.website} onChange={(event) => setOrgForm({ ...orgForm, website: event.target.value })} disabled title={futureTooltip} />
+              <Button className="w-full opacity-55" type="submit" disabled title={futureTooltip}>
                 <Save size={16} />
                 {editingOrg ? 'Save organization' : 'Create organization'}
               </Button>
@@ -218,7 +250,7 @@ export default function MentorCatalogManager() {
             </div>
 
             <form className="mt-5 space-y-3" onSubmit={submitCertification}>
-              <select className="field" value={certForm.organizationId} onChange={(event) => setCertForm({ ...certForm, organizationId: event.target.value })} required>
+              <select className="field opacity-60" value={certForm.organizationId} onChange={(event) => setCertForm({ ...certForm, organizationId: event.target.value })} required disabled title={futureTooltip}>
                 <option value="">Select organization</option>
                 {organizationOptions.map((organization) => (
                   <option key={organization._id || organization.id} value={organization._id || organization.id}>
@@ -226,27 +258,27 @@ export default function MentorCatalogManager() {
                   </option>
                 ))}
               </select>
-              <input className="field" placeholder="Certificate name" value={certForm.certificateName} onChange={(event) => setCertForm({ ...certForm, certificateName: event.target.value })} required />
-              <textarea className="field min-h-24 resize-none" placeholder="Description" value={certForm.description} onChange={(event) => setCertForm({ ...certForm, description: event.target.value })} />
+              <input className="field opacity-60" placeholder="Certificate name" value={certForm.certificateName} onChange={(event) => setCertForm({ ...certForm, certificateName: event.target.value })} required disabled title={futureTooltip} />
+              <textarea className="field min-h-24 resize-none opacity-60" placeholder="Description" value={certForm.description} onChange={(event) => setCertForm({ ...certForm, description: event.target.value })} disabled title={futureTooltip} />
               <div className="grid gap-3 sm:grid-cols-2">
-                <select className="field" value={certForm.category} onChange={(event) => setCertForm({ ...certForm, category: event.target.value })}>
+                <select className="field opacity-60" value={certForm.category} onChange={(event) => setCertForm({ ...certForm, category: event.target.value })} disabled title={futureTooltip}>
                   {categories.map((category) => <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>)}
                 </select>
-                <select className="field" value={certForm.difficultyLevel} onChange={(event) => setCertForm({ ...certForm, difficultyLevel: event.target.value })}>
+                <select className="field opacity-60" value={certForm.difficultyLevel} onChange={(event) => setCertForm({ ...certForm, difficultyLevel: event.target.value })} disabled title={futureTooltip}>
                   {difficulties.map((difficulty) => <option key={difficulty} value={difficulty}>{DIFFICULTY_LABELS[difficulty]}</option>)}
                 </select>
               </div>
-              <select className="field" value={certForm.verificationType} onChange={(event) => setCertForm({ ...certForm, verificationType: event.target.value })}>
+              <select className="field opacity-60" value={certForm.verificationType} onChange={(event) => setCertForm({ ...certForm, verificationType: event.target.value })} disabled title={futureTooltip}>
                 {verificationTypes.map((type) => <option key={type} value={type}>{VERIFICATION_LABELS[type]}</option>)}
               </select>
-              <input className="field" placeholder="Skills, comma separated" value={certForm.skills} onChange={(event) => setCertForm({ ...certForm, skills: event.target.value })} />
+              <input className="field opacity-60" placeholder="Skills, comma separated" value={certForm.skills} onChange={(event) => setCertForm({ ...certForm, skills: event.target.value })} disabled title={futureTooltip} />
               <div className="grid gap-3 sm:grid-cols-2">
-                <Button className="w-full" type="submit" disabled={saving}>
+                <Button className="w-full opacity-55" type="submit" disabled title={futureTooltip}>
                   <Save size={16} />
                   {editingCert ? 'Save certification' : 'Create certification'}
                 </Button>
                 {editingCert && (
-                  <Button variant="secondary" className="w-full" onClick={() => { setEditingCert(null); setCertForm(emptyCert); }}>
+                  <Button variant="secondary" className="w-full opacity-55" disabled title={futureTooltip}>
                     Cancel edit
                   </Button>
                 )}
@@ -282,10 +314,10 @@ export default function MentorCatalogManager() {
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <button className="focus-ring rounded-xl p-2 text-slate-500 hover:bg-slate-900/5 dark:hover:bg-white/10" onClick={() => editOrganization(organization)} aria-label="Edit organization">
+                    <button className="focus-ring rounded-xl p-2 text-slate-500 opacity-50 hover:bg-slate-900/5 dark:hover:bg-white/10" onClick={() => editOrganization(organization)} aria-label="Edit organization" title={futureTooltip}>
                       <Edit3 size={15} />
                     </button>
-                    <button className="focus-ring rounded-xl p-2 text-rose-500 hover:bg-rose-500/10" onClick={() => deleteOrganization(organization)} aria-label="Archive organization">
+                    <button className="focus-ring rounded-xl p-2 text-rose-500 opacity-50 hover:bg-rose-500/10" onClick={() => deleteOrganization(organization)} aria-label="Archive organization" title={futureTooltip}>
                       <Archive size={15} />
                     </button>
                   </div>
@@ -319,11 +351,11 @@ export default function MentorCatalogManager() {
                           <ShieldCheck size={16} />
                           Inspect
                         </Button>
-                        <Button variant="secondary" onClick={() => editCertification(certification)}>
+                        <Button variant="secondary" className="opacity-55" onClick={() => editCertification(certification)} title={futureTooltip}>
                           <Edit3 size={16} />
                           Edit
                         </Button>
-                        <Button variant="danger" onClick={() => deleteCertification(certification)}>
+                        <Button variant="danger" className="opacity-55" onClick={() => deleteCertification(certification)} title={futureTooltip}>
                           <Trash2 size={16} />
                           Archive
                         </Button>

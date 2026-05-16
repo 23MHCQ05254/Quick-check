@@ -34,7 +34,7 @@ const mentorNav = [
   { label: 'AI Logs', to: '/mentor/review', icon: FileCheck2 },
   { label: 'Moderation', to: '/mentor/moderation', icon: ShieldCheck },
   { label: 'Analytics', to: '/mentor/analytics', icon: RadioTower },
-  { label: 'Catalog', to: '/mentor/catalog', icon: BookOpenCheck },
+  { label: 'Catalog', to: '/mentor/catalog', icon: BookOpenCheck, future: true },
   { label: 'Templates', to: '/mentor/templates', icon: BadgeCheck },
   { label: 'Students', to: '/mentor/students', icon: UsersRound },
   { label: 'Activity', to: '/mentor/activity', icon: Bell }
@@ -55,7 +55,12 @@ function NavItem({ item, onClick }) {
       }
     >
       <Icon size={18} />
-      {item.label}
+      <span className="min-w-0 flex-1">{item.label}</span>
+      {item.future && (
+        <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-normal text-white shadow-sm">
+          Future
+        </span>
+      )}
     </NavLink>
   );
 }
